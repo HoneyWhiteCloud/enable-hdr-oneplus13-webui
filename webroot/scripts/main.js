@@ -29,6 +29,7 @@ let LABEL_CACHE = new Map(); // 内存中的应用名称缓存 pkg -> name
 let PERSISTENT_CACHE = new Map(); // 从文件读取的持久化缓存 pkg -> {name, timestamp}
 let CACHE_DIRTY = false; // 缓存是否有未保存的更改
 let AUTO_SAVE_ENABLED = true; // 是否启用自动保存功能
+let IS_FIRST_RENDER = true; // 标记是否为首次渲染
 
 // 状态栏管理
 let STATUS_BAR = {
@@ -1510,6 +1511,14 @@ OBSERVER = new IntersectionObserver((entries) => {
 function render(apps){
   const L = listEl(); if (!L) return;
   L.innerHTML = '';
+  
+  // 只在首次渲染时添加动画类
+  if (IS_FIRST_RENDER) {
+    L.classList.add('first-load');
+  } else {
+    L.classList.remove('first-load');
+  }
+  
   const tpl = document.getElementById('card');
 
   // 智能排序：只在需要时将已选应用排到前面
@@ -1528,7 +1537,7 @@ function render(apps){
   if (OBSERVER){ try{ OBSERVER.disconnect(); }catch(_){ } }
   
   // 为每个应用项绑定 IntersectionObserver
-  for (const app of sortedApps){
+  for (const [index, app] of sortedApps.entries()){
     let node;
     if (tpl && tpl.content && tpl.content.firstElementChild){
       node = tpl.content.firstElementChild.cloneNode(true);
@@ -1543,6 +1552,16 @@ function render(apps){
         </div>`;
     }
     node.setAttribute('data-pkg', app.pkg);
+    
+    // 只在首次渲染时添加动画类和延迟
+    if (IS_FIRST_RENDER) {
+      node.classList.add('first-load');
+      // 为卡片设置动画延迟和索引
+      node.style.setProperty('--card-index', index);
+      // 简化延迟计算，更快速的动画
+      const maxDelay = Math.min(index * 0.03, 0.8); // 最大延迟0.8秒
+      node.style.setProperty('--animation-delay', `${maxDelay + 0.2}s`);
+    }
 
     const nameEl = node.querySelector('.name');
     const pkgEl  = node.querySelector('.pkg');
@@ -1591,6 +1610,11 @@ function render(apps){
   }
 
   setCount(SELECTED.size, APPS.length);
+  
+  // 首次渲染完成后，将标记设为false
+  if (IS_FIRST_RENDER) {
+    IS_FIRST_RENDER = false;
+  }
 }
 
 // ---------- 过滤 ---------- 

@@ -80,16 +80,16 @@ h1{
 }
 
 .menu-toggle{
-  width:40px;
-  height:40px;
+  height:44px;
+  width:44px;
   background:var(--card);
   border:1px solid var(--border);
-  border-radius:10px;
+  border-radius:12px;
   display:flex;
   align-items:center;
   justify-content:center;
   cursor:pointer;
-  transition:all 0.2s ease;
+  transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   color:var(--fg);
   box-shadow:0 2px 4px rgba(0,0,0,0.1);
   font-size:0; /* 防止额外空白 */
@@ -102,6 +102,12 @@ h1{
   color:inherit;
   fill:currentColor;
   stroke:none;
+  transition:transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 菜单打开时图标旋转 */
+.menu-container:has(.menu-dropdown.show) .menu-toggle svg{
+  transform:rotate(90deg);
 }
 
 .menu-fallback{
@@ -124,13 +130,13 @@ h1{
 .menu-toggle:hover{
   border-color:var(--border-hover);
   background:var(--card-hover);
-  transform:translateY(-1px);
-  box-shadow:0 4px 8px rgba(0,0,0,0.15);
+  transform:translateY(-2px);
+  box-shadow:0 6px 12px rgba(0,0,0,0.2);
 }
 
 .menu-toggle:active{
-  transform:translateY(0);
-  box-shadow:0 2px 4px rgba(0,0,0,0.1);
+  transform:translateY(-1px);
+  box-shadow:0 3px 6px rgba(0,0,0,0.15);
   background:var(--border);
 }
 
@@ -150,8 +156,8 @@ h1{
   box-shadow:0 8px 24px rgba(0,0,0,0.25);
   opacity:0;
   visibility:hidden;
-  transform:translateY(-8px);
-  transition:all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transform:translateY(-12px) scale(0.95);
+  transition:all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   z-index:1000;
   backdrop-filter:blur(20px);
 }
@@ -159,7 +165,12 @@ h1{
 .menu-dropdown.show{
   opacity:1;
   visibility:visible;
-  transform:translateY(0);
+  transform:translateY(0) scale(1);
+}
+
+/* 菜单项渐入动画 */
+.menu-items{
+  padding:8px 0;
 }
 
 .menu-header{
@@ -201,7 +212,7 @@ h1{
   border:none;
   color:var(--fg);
   cursor:pointer;
-  transition:all 0.15s ease;
+  transition:all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   font-size:14px;
   text-align:left;
   outline:none;
@@ -210,15 +221,23 @@ h1{
   line-height:1.5;
   user-select:none;
   -webkit-tap-highlight-color:transparent;
+  border-radius:8px;
+  
+  /* 默认状态 */
+  opacity:1;
+  transform:translateX(0);
 }
 
 .menu-item:hover{
   background:var(--card-hover);
   color:var(--accent);
+  transform:translateX(4px);
+  padding-left:20px;
 }
 
 .menu-item:active{
   background:var(--border);
+  transform:translateX(2px) scale(0.98);
 }
 
 .menu-item.primary{
@@ -298,6 +317,35 @@ button:active{
   grid-template-columns:repeat(auto-fill,minmax(320px,1fr));
   gap:16px;
   margin-top:20px;
+  
+  /* 默认状态 - 不播放动画 */
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+/* 首次加载的列表动画 */
+.list.first-load{
+  opacity: 0;
+  animation: listFadeIn 0.4s ease-out 0.1s forwards;
+}
+
+/* 简化的淡入动画关键帧 */
+@keyframes listFadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes cardFadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
 }
 
 /* 现代化卡片样式 */
@@ -313,6 +361,17 @@ button:active{
     min-height:auto;
     position:relative;
     box-shadow:0 2px 8px rgba(0,0,0,0.1);
+    
+    /* 增强的开屏淡入动画 - 只在首次加载时播放 */
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+/* 首次加载的卡片动画 */
+.card.first-load, .no-icon-card.first-load{
+    opacity: 0;
+    animation: cardFadeIn 0.5s ease-out forwards;
+    animation-delay: var(--animation-delay, calc(var(--card-index, 0) * 0.03s + 0.2s));
 }
 
 .card:hover, .no-icon-card:hover{
@@ -462,8 +521,8 @@ button:active{
     }
     
     .menu-toggle{
-        width:36px;
-        height:36px;
+        width:40px;
+        height:40px;
     }
     
     .menu-dropdown{
@@ -521,8 +580,8 @@ button:active{
     }
     
     .menu-toggle{
-        width:32px;
-        height:32px;
+        width:36px;
+        height:36px;
     }
     
     .menu-dropdown{
