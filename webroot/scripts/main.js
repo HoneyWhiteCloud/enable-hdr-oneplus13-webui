@@ -40,7 +40,9 @@ let STATUS_BAR = {
   failedApps: 0,
   showStuckTip: false,
   stuckTipTimer: null,
-  startTime: null
+  startTime: null,
+  lastProgressTime: null,
+  lastLabeledCount: 0
 };
 
 // 超时和失败管理
@@ -73,6 +75,23 @@ function updateStatusBar() {
   const statusTextEl = document.getElementById('statusText');
   if (!statusTextEl) return;
 
+  const now = Date.now();
+  
+  // 检查进度是否有更新
+  if (STATUS_BAR.labeledApps !== STATUS_BAR.lastLabeledCount) {
+    STATUS_BAR.lastLabeledCount = STATUS_BAR.labeledApps;
+    STATUS_BAR.lastProgressTime = now;
+    
+    // 进度有更新，清除之前的提示和定时器
+    if (STATUS_BAR.showStuckTip) {
+      STATUS_BAR.showStuckTip = false;
+    }
+    if (STATUS_BAR.stuckTipTimer) {
+      clearTimeout(STATUS_BAR.stuckTipTimer);
+      STATUS_BAR.stuckTipTimer = null;
+    }
+  }
+
   let message = '';
   
   if (STATUS_BAR.isCompleted) {
@@ -101,14 +120,16 @@ function updateStatusBar() {
 
   statusTextEl.textContent = message;
   
-  // 如果是第一次加载且没有完成，10秒后显示提示
-  if ((STATUS_BAR.isFirstTime || STATUS_BAR.isChecking) && !STATUS_BAR.isCompleted && !STATUS_BAR.stuckTipTimer) {
+  // 基于进度更新时间的卡住提示逻辑
+  if ((STATUS_BAR.isFirstTime || STATUS_BAR.isChecking) && !STATUS_BAR.isCompleted && !STATUS_BAR.stuckTipTimer && STATUS_BAR.lastProgressTime) {
     STATUS_BAR.stuckTipTimer = setTimeout(() => {
-      if (!STATUS_BAR.isCompleted) {
+      // 检查是否真的5秒没有进度更新
+      const timeSinceLastProgress = Date.now() - STATUS_BAR.lastProgressTime;
+      if (timeSinceLastProgress >= 5000 && !STATUS_BAR.isCompleted) {
         STATUS_BAR.showStuckTip = true;
         updateStatusBar();
       }
-    }, 5000); // 5秒后显示提示
+    }, 5000); // 5秒后检查
   }
 }
 
@@ -1633,6 +1654,9 @@ async function init(){
     APPS.forEach(app => APP_MAP.set(app.pkg, app));
     STATUS_BAR.totalApps = APPS.length;
     STATUS_BAR.labeledApps = APPS.filter(app => app.labeled).length;
+    // 初始化进度跟踪时间
+    STATUS_BAR.lastProgressTime = Date.now();
+    STATUS_BAR.lastLabeledCount = STATUS_BAR.labeledApps;
     updateStatusBar();
     
     // 5) 重新加载时需要排序
