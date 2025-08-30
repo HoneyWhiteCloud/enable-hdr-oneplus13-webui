@@ -108,7 +108,7 @@ function updateStatusBar() {
         STATUS_BAR.showStuckTip = true;
         updateStatusBar();
       }
-    }, 10000); // 10秒后显示提示
+    }, 5000); // 5秒后显示提示
   }
 }
 
@@ -1063,7 +1063,7 @@ function parseAaptLabel(output) {
 const LABEL_QUEUE = [];
 const LABEL_DONE  = new Set();
 let   LABEL_RUNNING = 0;
-const LABEL_CONCURRENCY = 32; // 保持原来的32个并发
+const LABEL_CONCURRENCY = 32; // 恢复32个并发
 
 async function labelWorker(){
   if (LABEL_RUNNING >= LABEL_CONCURRENCY) return;
@@ -1184,7 +1184,8 @@ async function labelWorker(){
         }
       }
 
-      if (label && label !== app.name){
+      if (label){
+        // 只要获取到标签就立即标记为完成
         app.name = label;
         app.labeled = true;
         // 成功获取到标签，清除重试计数和时间记录
@@ -1213,7 +1214,10 @@ async function labelWorker(){
         // 没有获取到标签，将其重新加入队列等待重试（无论是否来自缓存）
         const currentRetryCount = APP_RETRY_COUNT.get(app.pkg) || 0;
         if (currentRetryCount < MAX_RETRY_COUNT) {
-          LABEL_QUEUE.push(app);
+          // 检查应用是否已经在队列中，避免重复
+          if (!LABEL_QUEUE.find(queueApp => queueApp.pkg === app.pkg)) {
+            LABEL_QUEUE.push(app);
+          }
         } else {
           // 超过重试次数，使用fallback名称
           const tail = app.pkg.split('.').pop() || app.pkg;
@@ -1250,8 +1254,27 @@ async function labelWorker(){
   }
 }
 
+// 队列去重函数
+function deduplicateQueue() {
+  if (LABEL_QUEUE.length === 0) return; // 队列为空时直接返回
+  
+  const seen = new Set();
+  const uniqueQueue = [];
+  
+  for (const app of LABEL_QUEUE) {
+    if (app && app.pkg && !seen.has(app.pkg) && !app.labeled) {
+      seen.add(app.pkg);
+      uniqueQueue.push(app);
+    }
+  }
+  
+  LABEL_QUEUE.length = 0; // 清空后再填入去重的结果
+  LABEL_QUEUE.push(...uniqueQueue);
+}
+
 // 定义 runLabelWorkers 函数
 function runLabelWorkers(){
+  deduplicateQueue(); // 去重
   // 这个函数会启动多个 worker 来并发处理所有未标记的应用
   while (LABEL_QUEUE.length > 0 && LABEL_RUNNING < LABEL_CONCURRENCY) {
     labelWorker();
@@ -1279,7 +1302,7 @@ function checkLabelingComplete() {
     updateStatusBar();
     
     // 延迟显示完成状态后，切换到实用提示
-    const completionDelay = STATUS_BAR.failedApps > 0 ? 5000 : 3000;
+    const completionDelay = 3000; // 固定3秒显示完成状态
     setTimeout(() => {
       const statusTextEl = document.getElementById('statusText');
       if (statusTextEl && STATUS_BAR.isCompleted) {
@@ -1326,8 +1349,11 @@ function setupDeadlockDetection() {
         missingApps: unlabeledApps.slice(0, 5).map(app => app.pkg) // 记录前5个
       });
       
-      // 重新将未标记的应用加入队列
-      LABEL_QUEUE.push(...unlabeledApps);
+      // 重新将未标记的应用加入队列（避免重复）
+      const missingApps = unlabeledApps.filter(app => 
+        !LABEL_QUEUE.find(queueApp => queueApp.pkg === app.pkg)
+      );
+      LABEL_QUEUE.push(...missingApps);
       runLabelWorkers();
     }
     
@@ -1506,7 +1532,9 @@ function render(apps){
 
     if (cb){
       cb.checked = SELECTED.has(app.pkg);  // 预勾选 ✅
-      cb.onchange = async () => {
+      
+      // 复选框变化处理函数
+      const handleToggle = async () => {
         if (cb.checked) {
           SELECTED.add(app.pkg);
         } else {
@@ -1519,6 +1547,20 @@ function render(apps){
         if (AUTO_SAVE_ENABLED) {
           await saveSelectedRealtime();
         }
+      };
+      
+      // 绑定复选框变化事件
+      cb.onchange = handleToggle;
+      
+      // 绑定整个卡片的点击事件
+      node.onclick = (e) => {
+        // 如果直接点击的是复选框，不要重复处理
+        if (e.target === cb) return;
+        
+        // 切换复选框状态
+        cb.checked = !cb.checked;
+        // 手动触发处理函数
+        handleToggle();
       };
     }
 
