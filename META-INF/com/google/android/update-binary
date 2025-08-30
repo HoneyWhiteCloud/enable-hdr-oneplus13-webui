@@ -1,0 +1,114 @@
+#!/sbin/sh
+
+OUTFD=$2
+ZIPFILE=$3
+
+# 兼容性检查：支持Magisk和KernelSU
+if [ -f /data/adb/ksu/ksu ]; then
+    # KernelSU环境
+    KERNELSU=true
+    MODPATH="/data/adb/modules/enable-hdr-oneplus13-webui"
+    ui_print "- KernelSU detected"
+else
+    # Magisk环境
+    KERNELSU=false
+    mount /data 2>/dev/null
+    
+    # Load utility functions
+    [ -f /data/adb/magisk/util_functions.sh ] && . /data/adb/magisk/util_functions.sh
+    [ $MAGISK_VER_CODE -gt 18100 ] && require_new_magisk || require_new_api
+fi
+
+# 检查安装模式
+if [ "$KERNELSU" = "true" ]; then
+    # KernelSU总是从应用安装
+    BOOTMODE=true
+else
+    # Magisk检查安装模式
+    if $BOOTMODE; then
+        ui_print "- Installing from Magisk app"
+    else
+        ui_print "*********************************************************"
+        ui_print " Please install this module via Magisk app"
+        ui_print "*********************************************************"
+        abort
+    fi
+fi
+
+ui_print "=============================================="
+ui_print " Enable HDR for OnePlus 13 (WebUI)"
+ui_print " Version: v1.6.0"
+ui_print " Author: Oxford,HoneyWhiteCloud,FTReey@coolapk"
+ui_print "=============================================="
+
+DEVICE_BRAND=`getprop ro.product.brand`
+DEVICE_MODEL=`getprop ro.product.model`
+ui_print "- Device: $DEVICE_BRAND $DEVICE_MODEL"
+
+# 创建模块目录
+mkdir -p "$MODPATH" 2>/dev/null
+if [ ! -d "$MODPATH" ]; then
+    ui_print "- Error: Cannot create module directory"
+    abort
+fi
+
+ui_print "- Extracting module files"
+unzip -o "$ZIPFILE" -x 'META-INF/*' -d "$MODPATH" >&2
+if [ $? -ne 0 ]; then
+    ui_print "- Error: Failed to extract module files"
+    abort
+fi
+
+ui_print "- Setting permissions"
+if [ "$KERNELSU" = "true" ]; then
+    # KernelSU权限设置
+    chmod -R 755 "$MODPATH" 2>/dev/null
+    chmod 644 "$MODPATH"/*.xml 2>/dev/null
+    chmod 755 "$MODPATH"/*.sh 2>/dev/null
+    chmod -R 755 "$MODPATH/bin" 2>/dev/null
+    chmod -R 755 "$MODPATH/webroot" 2>/dev/null
+else
+    # Magisk权限设置
+    set_perm_recursive $MODPATH 0 0 0755 0644
+    set_perm_recursive $MODPATH/system 0 0 0755 0644
+    set_perm $MODPATH/service.sh 0 0 0755
+    set_perm $MODPATH/post-fs-data.sh 0 0 0755
+    set_perm $MODPATH/uninstall.sh 0 0 0755
+fi
+
+ui_print "- Creating system overlay structure"
+mkdir -p "$MODPATH/system/my_product/vendor/etc" 2>/dev/null
+touch "$MODPATH/system/my_product/vendor/etc/.replace" 2>/dev/null
+
+if [ -d "$MODPATH/webroot" ]; then
+    ui_print "- Setting up WebUI"
+    if [ "$KERNELSU" = "true" ]; then
+        chmod -R 755 "$MODPATH/webroot" 2>/dev/null
+    else
+        set_perm_recursive $MODPATH/webroot 0 0 0755 0644
+    fi
+    ui_print "  WebUI available at: $MODPATH/webroot/"
+fi
+
+# 验证关键文件
+ui_print "- Verifying module files"
+if [ ! -f "$MODPATH/appList.xml" ]; then
+    ui_print "- Warning: appList.xml not found"
+fi
+if [ ! -f "$MODPATH/post-fs-data.sh" ]; then
+    ui_print "- Warning: post-fs-data.sh not found"
+fi
+if [ ! -f "$MODPATH/webroot/index.html" ]; then
+    ui_print "- Warning: WebUI index.html not found"
+fi
+
+ui_print "- Installation completed"
+ui_print ""
+ui_print "- Please reboot your device"
+ui_print ""
+ui_print "📱 WebUI Management:"
+ui_print "  Recommended: WebUI-X-Portable"
+ui_print "  Download: https://github.com/MMRLApp/WebUI-X-Portable/releases"
+ui_print "  After installation, access HDR settings via WebUI manager"
+ui_print ""
+ui_print "=============================================="
