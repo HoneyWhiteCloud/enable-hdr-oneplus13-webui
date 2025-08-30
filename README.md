@@ -1,4 +1,4 @@
-**其他语言版本: [中文](README_CN.md).**
+**其他语言版本: [中文](README_zh.md).**
 
 
 # Enable HDR on OnePlus 13 with WebUI
@@ -46,6 +46,7 @@ How to use it?
 
 We recommend using [WebUI-X-Portable](https://github.com/MMRLApp/WebUI-X-Portable) as the webUI manager for Magisk/Delta/Kitsune/KernelSU users. 
 For platforms like SukiSU Ultra that allow you to change the webUI engine, use "Auto Select" or "Force WebUI X."
+
 
 
 
