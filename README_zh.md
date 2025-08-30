@@ -44,4 +44,8 @@ WebUI
 5. 安装完成后重启设备即可生效。
 6. 可选:通过 WebUI 自定义应用列表。
 
+推荐magisk/Delta/Kitsune/KernelSU用户使用[WebUI-X-Portable](https://github.com/MMRLApp/WebUI-X-Portable)作为webui的管理器
+SukiSU Ultra等可以变更webui引擎的则使用“自动选择”或者"强制使用WebUI X"
+
+
 
