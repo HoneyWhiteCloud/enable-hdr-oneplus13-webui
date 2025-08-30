@@ -23,9 +23,9 @@ TARGET_FILE="/my_product/vendor/etc/multimedia_display_feature_config.xml"
 BACKUP_FILE="$BACKUP_DIR/multimedia_display_feature_config.xml"
 MODULE_FILE="$MODPATH/multimedia_display_feature_config.xml"
 
-TARGET_FILE_NEW="/my_product/vendor/etc/multimedia_display_uir_config.xml"
-BACKUP_FILE_NEW="$BACKUP_DIR/multimedia_display_uir_config.xml"
-MODULE_FILE_NEW="$MODPATH/multimedia_display_uir_config.xml"
+# TARGET_FILE_NEW="/my_product/vendor/etc/multimedia_display_uir_config.xml"
+# BACKUP_FILE_NEW="$BACKUP_DIR/multimedia_display_uir_config.xml"
+# MODULE_FILE_NEW="$MODPATH/multimedia_display_uir_config.xml"
 
 # 初始化日志文件
 if [ -f "$log_file" ]; then
@@ -64,18 +64,18 @@ else
 fi
 
 # 备份 multimedia_display_uir_config.xml
-if [ ! -f "$BACKUP_FILE_NEW" ] && [ -f "$TARGET_FILE_NEW" ]; then
-    log_msg "INFO" "备份 multimedia_display_uir_config.xml"
-    if cp "$TARGET_FILE_NEW" "$BACKUP_FILE_NEW" 2>/dev/null; then
-        log_msg "SUCCESS" "multimedia_display_uir_config.xml 备份成功"
-    else
-        log_msg "ERROR" "multimedia_display_uir_config.xml 备份失败"
-    fi
-else
-    log_msg "INFO" "multimedia_display_uir_config.xml 备份跳过"
-    log_msg "DEBUG" "备份文件存在: $([ -f "$BACKUP_FILE_NEW" ] && echo "是" || echo "否")"
-    log_msg "DEBUG" "原文件存在: $([ -f "$TARGET_FILE_NEW" ] && echo "是" || echo "否")"
-fi
+# if [ ! -f "$BACKUP_FILE_NEW" ] && [ -f "$TARGET_FILE_NEW" ]; then
+    # log_msg "INFO" "备份 multimedia_display_uir_config.xml"
+    # if cp "$TARGET_FILE_NEW" "$BACKUP_FILE_NEW" 2>/dev/null; then
+        # log_msg "SUCCESS" "multimedia_display_uir_config.xml 备份成功"
+    # else
+        # log_msg "ERROR" "multimedia_display_uir_config.xml 备份失败"
+    # fi
+# else
+    # log_msg "INFO" "multimedia_display_uir_config.xml 备份跳过"
+    # log_msg "DEBUG" "备份文件存在: $([ -f "$BACKUP_FILE_NEW" ] && echo "是" || echo "否")"
+    # log_msg "DEBUG" "原文件存在: $([ -f "$TARGET_FILE_NEW" ] && echo "是" || echo "否")"
+# fi
 
 # 挂载处理函数
 mount_file() {
@@ -127,17 +127,17 @@ else
 fi
 
 # 挂载 multimedia_display_uir_config.xml
-log_msg "MAIN" "检查并挂载 multimedia_display_uir_config.xml"
-if mount_file "$MODULE_FILE_NEW" "$TARGET_FILE_NEW" "multimedia_display_uir_config.xml"; then
-    uir_mounted="已挂载"
-else
-    uir_mounted="未挂载"
-fi
+# log_msg "MAIN" "检查并挂载 multimedia_display_uir_config.xml"
+# if mount_file "$MODULE_FILE_NEW" "$TARGET_FILE_NEW" "multimedia_display_uir_config.xml"; then
+    # uir_mounted="已挂载"
+# else
+    # uir_mounted="未挂载"
+# fi
 
 # 记录最终状态
-log_msg "FINAL" "======== 最终执行状态 ========"
-log_msg "FINAL" "功能配置文件: $feature_mounted"
-log_msg "FINAL" "UIR 配置文件: $uir_mounted"
+# log_msg "FINAL" "======== 最终执行状态 ========"
+# log_msg "FINAL" "功能配置文件: $feature_mounted"
+# log_msg "FINAL" "UIR 配置文件: $uir_mounted"
 
 # 记录文件状态
 if [ -f "$MODULE_FILE" ]; then
@@ -145,13 +145,14 @@ if [ -f "$MODULE_FILE" ]; then
     log_msg "FINAL" "功能配置文件大小: $feature_size 字节"
 fi
 
-if [ -f "$MODULE_FILE_NEW" ]; then
-    uir_size=$(wc -c < "$MODULE_FILE_NEW" 2>/dev/null || echo "0")
-    log_msg "FINAL" "UIR配置文件大小: $uir_size 字节"
-fi
+# if [ -f "$MODULE_FILE_NEW" ]; then
+    # uir_size=$(wc -c < "$MODULE_FILE_NEW" 2>/dev/null || echo "0")
+    # log_msg "FINAL" "UIR配置文件大小: $uir_size 字节"
+# fi
 
 log_msg "INFO" "XML处理逻辑已移至WebUI，请通过WebUI界面进行文件合并操作"
 log_msg "END" "======== post-fs-data.sh 执行结束 ========"
+log_msg 
 
 # 始终成功退出
 exit 0
