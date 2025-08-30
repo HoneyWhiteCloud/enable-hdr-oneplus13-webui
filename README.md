@@ -44,6 +44,8 @@ How to use it?
 5. After installation, reboot your device for the module to take effect.
 6. Open the WebUI to customize the app list.
 
+We recommend using [WebUI-X-Portable](https://github.com/MMRLApp/WebUI-X-Portable) as the webUI manager for Magisk/Delta/Kitsune/KernelSU users. 
+For platforms like SukiSU Ultra that allow you to change the webUI engine, use "Auto Select" or "Force WebUI X."
 
 
 
