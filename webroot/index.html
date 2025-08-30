@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <title>HDR App 选择器 - OnePlus 13</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- 保持原有样式结构，不在 HTML 内写 style -->
+  <link rel="stylesheet" href="styles/global.css" />
+  <link rel="stylesheet" href="styles/header.css" />
+  <link rel="stylesheet" href="styles/search_menu.css" />
+</head>
+<body>
+  <header class="header">
+    <!-- 第一行：标题 -->
+    <div class="row">
+      <h1>🎮 HDR App 选择器</h1>
+    </div>
+
+    <!-- 第二行：搜索栏和菜单 -->
+    <div class="row">
+      <div class="search-container">
+        <input id="search" placeholder="🔍 搜索应用（包名 / 应用名）" autocapitalize="none" />
+        <div class="loading" id="loading">
+          <!-- 保留简洁的loading结构，样式由原CSS负责 -->
+          <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" stroke-width="2" fill="none"></circle>
+          </svg>
+          <span>载入中</span>
+        </div>
+        
+        <!-- 菜单按钮 -->
+        <div class="menu-container">
+          <button id="menuToggle" class="menu-toggle" aria-label="打开菜单" title="工具菜单">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="12" cy="12" r="2"></circle>
+              <circle cx="12" cy="5" r="2"></circle>
+              <circle cx="12" cy="19" r="2"></circle>
+            </svg>
+            <span class="menu-fallback">⋮</span>
+          </button>
+          
+          <!-- 下拉菜单 -->
+          <div id="menuDropdown" class="menu-dropdown">
+            <div class="menu-header">
+              <span class="menu-title">工具菜单</span>
+              <span id="count" class="menu-badge"></span>
+            </div>
+            <div class="menu-items">
+              <button id="reload" class="menu-item">
+                <span class="menu-icon">🔄</span>
+                <span class="menu-text">重新载入</span>
+              </button>
+              <button id="selectAll" class="menu-item">
+                <span class="menu-icon">☑️</span>
+                <span class="menu-text">全选</span>
+              </button>
+              <button id="deselectAll" class="menu-item">
+                <span class="menu-icon">❌</span>
+                <span class="menu-text">全不选</span>
+              </button>
+              <button id="save" class="menu-item primary">
+                <span class="menu-icon">💾</span>
+                <span class="menu-text">保存配置</span>
+              </button>
+              <button id="reboot" class="menu-item danger">
+                <span class="menu-icon">🔄</span>
+                <span class="menu-text">重启手机</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 第三行：状态栏 -->
+    <div class="row">
+      <div id="statusBar" class="status-bar">
+        <span id="statusText">初始化中...</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- 列表容器（沿用原ID/类名） -->
+  <main class="container">
+    <div id="list" class="list"></div>
+    <div id="empty" class="empty" style="display:none">📱 没有找到匹配的应用</div>
+  </main>
+
+  <!-- 列表项模板（沿用原结构：checkbox + info(name/pkg)） -->
+  <template id="card">
+    <div class="card">
+      <input type="checkbox" class="checkbox" />
+      <div class="info">
+        <div class="name"></div>
+        <div class="pkg"></div>
+      </div>
+    </div>
+  </template>
+
+  <!-- 轻提示（若你原有样式有toast，这里保留容器） -->
+  <div id="toast" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- 依旧保持模块化脚本顺序：若你有 i18n，会先加载 -->
+  <script type="module" src="scripts/i18n.js"></script>
+  <script type="module" src="scripts/main.js"></script>
+</body>
+</html>

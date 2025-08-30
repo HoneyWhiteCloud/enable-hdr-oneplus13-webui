@@ -1,0 +1,13 @@
+{
+    "version": "v1.6.0",
+    "versionCode": 1600,
+    "zipUrl": "https://github.com/HoneyWhiteCloud/enable-hdr-oneplus13-webui/releases/latest/download/enable-hdr-oneplus13-webui.zip",
+    "changelog": "https://raw.githubusercontent.com/HoneyWhiteCloud/enable-hdr-oneplus13-webui/main/CHANGELOG.md",
+    "note": "https://raw.githubusercontent.com/HoneyWhiteCloud/enable-hdr-oneplus13-webui/main/README.md",
+    "homepage": "https://github.com/HoneyWhiteCloud/enable-hdr-oneplus13-webui",
+    "source": "https://github.com/HoneyWhiteCloud/enable-hdr-oneplus13-webui",
+    "support": "https://github.com/HoneyWhiteCloud/enable-hdr-oneplus13-webui/issues",
+    "minMagisk": 25000,
+    "minKernelSU": 11223,
+    "maxApi": 35
+}

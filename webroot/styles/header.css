@@ -1,0 +1,115 @@
+.header{
+  position:sticky; 
+  top:0; 
+  z-index:100; 
+  backdrop-filter:blur(20px);
+  background:rgba(10,12,16,0.85);
+  border-bottom:1px solid var(--border);
+  box-shadow:0 1px 3px var(--shadow);
+  /* WebUI管理器状态栏兼容性 - 只在 header 顶部添加安全区域 */
+  /* 使用 clamp 限制最小和最大值，确保间距合理 */
+  padding-top: clamp(0px, var(--top-inset), 24px);
+}
+
+.header .row{ 
+  display:flex; 
+  align-items:center; 
+  gap:16px;
+  padding:16px 20px;
+  max-width:1200px;
+  margin:0 auto;
+}
+
+.header h1{ 
+  margin:0; 
+  font-size:18px; 
+  letter-spacing:.2px; 
+  flex-shrink:0; 
+}
+
+/* 支持搜索框布局 */
+.header .search{
+  margin-left:auto;
+  display:flex;
+  gap:8px;
+  align-items:center;
+  position:relative;
+}
+
+/* 状态栏样式 */
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  min-height: 20px;
+}
+
+.status-bar #statusText {
+  font-size: 13px;
+  color: #9ca3af;
+  font-weight: 400;
+  text-align: center;
+  line-height: 1.4;
+  opacity: 0.85;
+}
+
+.status-bar #statusText:not(:empty) {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 0.85; }
+}
+
+/* 响应式设计 */
+@media (max-width:600px){
+  .header .row{
+    flex-direction:column;
+    align-items:stretch;
+    gap:8px;
+  }
+  .header .search{
+    margin-left:0;
+    width:100%;
+  }
+  .header .search input{
+    width:100%;
+    min-width:0;
+  }
+  .status-bar {
+    padding: 6px 12px;
+  }
+  .status-bar #statusText {
+    font-size: 12px;
+  }
+}
+
+/* WebUI-X 特定优化 */
+@media (max-width: 480px) {
+  .header {
+    /* 在小屏幕上减少顶部间距 */
+    padding-top: clamp(0px, var(--top-inset), 16px);
+  }
+  
+  .header .row {
+    padding: 12px 16px;
+  }
+}
+
+/* 确保在WebUI管理器中状态栏不会过度占用空间 */
+@media (min-height: 600px) {
+  .header {
+    /* 在较高屏幕上可以适当增加顶部间距 */
+    padding-top: clamp(0px, var(--top-inset), 32px);
+  }
+}
+
+/* 针对WebUI-X的额外优化 */
+@supports (padding: max(0px)) {
+  .header {
+    /* 使用现代CSS的max函数来确保间距不会过大 */
+    padding-top: max(0px, min(var(--top-inset), 24px));
+  }
+}

@@ -1,0 +1,7 @@
+id=enable-hdr-oneplus13-webui
+name=Enable HDR for OnePlus 13 (WebUI)
+version=v1.6.0
+versionCode=1600
+author=Oxford,HoneyWhiteCloud,FTReey@coolapk
+description=Allow more apps to enable HDR on OnePlus 13 with Web Interface support for both Magisk and KernelSU. Access via module manager WebUI or /data/adb/modules/enable-hdr-oneplus13-webui/webroot/
+updateJson=

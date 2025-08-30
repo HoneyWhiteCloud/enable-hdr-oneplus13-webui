@@ -1,0 +1,110 @@
+.search-menu-container{
+  display:flex; 
+  position:sticky; 
+  top:calc(48px + 6px); 
+  width:100%; 
+  padding:6px 10px; 
+  z-index:99;
+}
+
+.search-card{
+  margin:0 auto; 
+  width:100%; 
+  max-width:1100px; 
+  position:relative;
+  background:var(--card); 
+  border:1px solid #1f2937; 
+  border-radius:10px; 
+  box-shadow:0 2px 6px rgba(0,0,0,.25);
+  display:flex; 
+  align-items:center; 
+  padding:8px 42px 8px 12px;
+}
+
+.search-input{
+  flex:1; 
+  width:100%; 
+  background:transparent; 
+  border:none; 
+  outline:none; 
+  color:var(--fg); 
+  font-size:14px;
+  padding:4px 0; 
+}
+
+.search-input:focus{
+  outline:none; 
+}
+
+.clear-btn{
+  position:absolute; 
+  right:8px; 
+  top:50%; 
+  transform:translateY(-50%);
+  width:28px; 
+  height:28px; 
+  border-radius:50%; 
+  border:1px solid #2b3a55; 
+  background:#0f1722; 
+  color:var(--fg);
+  display:none; 
+  align-items:center; 
+  justify-content:center; 
+  cursor:pointer;
+  transition:all 0.2s ease; 
+}
+
+.clear-btn:hover{
+  border-color:var(--accent);
+  background:#1f2937;
+}
+
+.clear-btn.show{ 
+  display:flex; 
+}
+
+.search-card #loading{ 
+  position:absolute; 
+  right:44px; 
+  top:50%; 
+  transform:translateY(-50%); 
+  display:none; 
+  gap:6px; 
+  align-items:center; 
+  color:var(--muted);
+  font-size:12px; 
+}
+
+.search-card #loading.show{ 
+  display:flex; 
+}
+
+.search-card #loading svg{
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin{
+  from{transform:translateY(-50%) rotate(0deg);}
+  to{transform:translateY(-50%) rotate(360deg);}
+}
+
+/* 响应式设计 */
+@media (max-width:600px){
+  .search-menu-container{
+    padding:4px 8px;
+  }
+  
+  .search-card{
+    padding:6px 36px 6px 10px;
+  }
+  
+  .clear-btn{
+    width:24px;
+    height:24px;
+    right:6px;
+  }
+  
+  .search-card #loading{
+    right:36px;
+  }
+}
