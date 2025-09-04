@@ -19,6 +19,10 @@
   /* 限制顶部安全区域的最大值，避免过度间距 */
   --top-inset: max(var(--window-inset-top, 0px), 0px);
   --bottom-inset: var(--window-inset-bottom, 0px);
+  
+  /* Fixed header布局变量 */
+  --header-height: 120px;
+  --search-height: 50px;
 }
 * { box-sizing: border-box; }
 html,body{
@@ -30,6 +34,8 @@ html,body{
   min-height:100vh;
   /* 只在底部添加安全区域支持 */
   padding-bottom: var(--bottom-inset);
+  /* 防止菜单动画导致的页面滚动 */
+  overflow-x: hidden;
 }
 
 /* Header 样式已移至 header.css 以避免冲突 */
@@ -77,6 +83,8 @@ h1{
   position:relative;
   display:flex;
   align-items:center;
+  /* 允许菜单和焦点圈正常显示 */
+  overflow:visible;
 }
 
 .menu-toggle{
@@ -156,16 +164,18 @@ h1{
   box-shadow:0 8px 24px rgba(0,0,0,0.25);
   opacity:0;
   visibility:hidden;
-  transform:translateY(-12px) scale(0.95);
-  transition:all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transform:translateX(10px) translateY(-8px) scale(0.95);
+  transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   z-index:1000;
   backdrop-filter:blur(20px);
+  /* 确保菜单不会超出视口且不影响页面滚动 */
+  max-width:min(200px, calc(100vw - 32px));
 }
 
 .menu-dropdown.show{
   opacity:1;
   visibility:visible;
-  transform:translateY(0) scale(1);
+  transform:translateX(0) translateY(0) scale(1);
 }
 
 /* 菜单项渐入动画 */
@@ -223,9 +233,33 @@ h1{
   -webkit-tap-highlight-color:transparent;
   border-radius:8px;
   
-  /* 默认状态 */
-  opacity:1;
-  transform:translateX(0);
+  /* 初始状态 - 减少位移距离防止页面滚动 */
+  opacity:0;
+  transform:translateX(15px);
+}
+
+/* 移除复杂的菜单项动画，采用TrickyAddonModule的简单方案 */
+
+@keyframes menuItemSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateX(15px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes menuItemSlideOut {
+  0% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(10px);
+  }
 }
 
 .menu-item:hover{
@@ -252,11 +286,13 @@ h1{
 .menu-item.danger{
   color:#ef4444;
   font-weight:600;
+  transition: all 0.2s ease;
 }
 
 .menu-item.danger:hover{
   background:rgba(239,68,68,0.1);
   color:#f87171;
+  transform: translateX(2px);
 }
 
 .menu-icon{
@@ -272,8 +308,13 @@ h1{
 
 .container{
   max-width:1200px;
-  margin:20px auto;
+  /* 分别设置margin避免简写属性覆盖margin-top */
+  margin-left: auto;
+  margin-right: auto;
+  margin-bottom: 20px;
   padding:0 20px 120px;
+  /* 动态调整的margin-top，通过JavaScript计算header实际高度 */
+  margin-top: var(--dynamic-header-offset, 200px);
 }
 button{
   background:var(--card);
@@ -318,15 +359,21 @@ button:active{
   gap:16px;
   margin-top:20px;
   
-  /* 默认状态 - 不播放动画 */
+  /* 默认状态 */
   opacity: 1;
   transform: translateY(0) scale(1);
 }
 
-/* 首次加载的列表动画 */
+/* 首次加载的列表动画 - 确保在任何情况下都能播放 */
 .list.first-load{
   opacity: 0;
-  animation: listFadeIn 0.4s ease-out 0.1s forwards;
+  animation: listFadeIn 0.6s ease-out 0.1s forwards;
+}
+
+/* 列表动画完成状态 */
+.list.first-load-complete {
+  opacity: 1;
+  transition: opacity 0.3s ease-out;
 }
 
 /* 简化的淡入动画关键帧 */
@@ -537,7 +584,10 @@ button:active{
     
     .container{
         padding:0 16px 80px;
-        margin:16px auto;
+        /* 避免覆盖动态margin-top */
+        margin-left: auto;
+        margin-right: auto;
+        margin-bottom: 16px;
     }
     
     .list{

@@ -513,71 +513,7 @@ function setCount(sel,total){
   }
 }
 
-// 菜单交互逻辑
-async function setupMenuInteractions() {
-  await fileLog('menu','function-start');
-  
-  const menuToggle = document.getElementById('menuToggle');
-  const menuDropdown = document.getElementById('menuDropdown');
-  
-  await fileLog('menu','elements-check',{ 
-    menuToggle: !!menuToggle, 
-    menuDropdown: !!menuDropdown 
-  });
-  
-  if (!menuToggle || !menuDropdown) {
-    await fileLog('menu','elements-missing');
-    return;
-  }
-  
-  // 简化的切换函数
-  function toggleMenu(e) {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-    
-    const isShown = menuDropdown.classList.contains('show');
-    
-    if (isShown) {
-      menuDropdown.classList.remove('show');
-    } else {
-      menuDropdown.classList.add('show');
-    }
-  }
-  
-  // 隐藏菜单
-  function hideMenu() {
-    menuDropdown.classList.remove('show');
-  }
-  
-  // 绑定菜单按钮事件
-  await fileLog('menu','binding-toggle');
-  
-  menuToggle.onclick = function(e) {
-    toggleMenu(e);
-  };
-  
-  // 查找菜单项
-  const menuItems = menuDropdown.querySelectorAll('.menu-item');
-  await fileLog('menu','found-items',{ count: menuItems.length });
-  
-  // 绑定菜单项事件
-  menuItems.forEach((item, index) => {
-    item.onclick = function() {
-      setTimeout(hideMenu, 150);
-    };
-  });
-  
-  // 简化的外部点击处理
-  document.addEventListener('click', function(e) {
-    if (!menuToggle.contains(e.target) && !menuDropdown.contains(e.target)) {
-      hideMenu();
-    }
-  });
-  
-  await fileLog('menu','setup-complete');
-}
+// 菜单交互逻辑 - 已移除，使用setupMenuAnimation代替
 
 // ---------- 已选读取/保存 ----------
 async function loadSelectedFromXml(){
@@ -1515,6 +1451,10 @@ function render(apps){
   // 只在首次渲染时添加动画类
   if (IS_FIRST_RENDER) {
     L.classList.add('first-load');
+    // 确保列表动画完成后标记完成状态
+    setTimeout(() => {
+      L.classList.add('first-load-complete');
+    }, 800);
   } else {
     L.classList.remove('first-load');
   }
@@ -1611,9 +1551,12 @@ function render(apps){
 
   setCount(SELECTED.size, APPS.length);
   
-  // 首次渲染完成后，将标记设为false
-  if (IS_FIRST_RENDER) {
-    IS_FIRST_RENDER = false;
+  // 只有当应用列表真正准备好并且是首次渲染时，才将标记设为false
+  // 延迟设置，确保动画能够正确播放
+  if (IS_FIRST_RENDER && apps.length > 0) {
+    setTimeout(() => {
+      IS_FIRST_RENDER = false;
+    }, 1000); // 1秒后再设为false，确保动画完成
   }
 }
 
@@ -1800,20 +1743,7 @@ async function init(){
   }
 
   
-  // 事件绑定
-  const s = searchEl(); 
-  if (s) {
-    s.addEventListener('input', applyFilter);
-  }
-  
-  const r = $('reload'); 
-  if (r) {
-    const reloadHandler = async () => {
-      NEED_SORT_SELECTED = true; // 重新加载时需要排序
-      await init();
-    };
-    r.addEventListener('click', reloadHandler);
-  }
+  // 注意：搜索框和重新加载按钮的事件绑定已在setupBasicEvents中处理
   
   const sa = $('selectAll'); 
   if (sa) {
@@ -1866,6 +1796,8 @@ async function init(){
     };
     rb.addEventListener('click', rebootHandler);
   }
+
+  // 注意：全屏按钮的事件绑定已在setupBasicEvents中处理
 }
 
 // 动态调整顶部间距的函数
@@ -1915,4 +1847,389 @@ document.addEventListener('DOMContentLoaded', function() {
 // 导出函数供其他模块使用
 window.adjustTopInset = adjustTopInset;
 
-document.addEventListener('DOMContentLoaded', () => { init(); });
+// === 全屏和布局控制 ===
+let isFullscreenSupported = false;
+let isFullscreenActive = false;
+
+// 检测全屏API支持
+function checkFullscreenSupport() {
+  isFullscreenSupported = !!(
+    document.fullscreenEnabled ||
+    document.webkitFullscreenEnabled ||
+    document.mozFullScreenEnabled ||
+    document.msFullscreenEnabled
+  );
+  return isFullscreenSupported;
+}
+
+// 进入全屏模式
+function enterFullscreen() {
+  if (!isFullscreenSupported) return false;
+  
+  const docEl = document.documentElement;
+  try {
+    if (docEl.requestFullscreen) {
+      docEl.requestFullscreen();
+    } else if (docEl.webkitRequestFullscreen) {
+      docEl.webkitRequestFullscreen();
+    } else if (docEl.mozRequestFullScreen) {
+      docEl.mozRequestFullScreen();
+    } else if (docEl.msRequestFullscreen) {
+      docEl.msRequestFullscreen();
+    }
+    return true;
+  } catch (error) {
+    console.log('全屏模式请求失败:', error);
+    return false;
+  }
+}
+
+// 退出全屏模式
+function exitFullscreen() {
+  try {
+    if (document.exitFullscreen) {
+      document.exitFullscreen();
+    } else if (document.webkitExitFullscreen) {
+      document.webkitExitFullscreen();
+    } else if (document.mozCancelFullScreen) {
+      document.mozCancelFullScreen();
+    } else if (document.msExitFullscreen) {
+      document.msExitFullscreen();
+    }
+    return true;
+  } catch (error) {
+    console.log('退出全屏失败:', error);
+    return false;
+  }
+}
+
+// 动态计算并设置容器偏移量
+function updateDynamicLayout() {
+  const header = document.querySelector('.header');
+  const container = document.querySelector('.container');
+  
+  if (!header || !container) return;
+
+  // 获取header的实际高度
+  const headerRect = header.getBoundingClientRect();
+  const headerHeight = headerRect.height;
+  
+  // 获取当前的安全区域值
+  const topInset = parseInt(getComputedStyle(document.documentElement)
+    .getPropertyValue('--top-inset').replace('px', '')) || 0;
+  
+  // 计算总偏移量：header高度 + 安全区域 + 额外间距
+  const totalOffset = headerHeight + topInset + 25;
+  
+  // 设置CSS变量
+  document.documentElement.style.setProperty('--dynamic-header-offset', `${totalOffset}px`);
+  
+  // 验证CSS变量是否实际应用
+  const computedOffset = getComputedStyle(document.documentElement)
+    .getPropertyValue('--dynamic-header-offset');
+  const containerComputedTop = container.offsetTop;
+  
+  console.log('布局调试信息:', {
+    headerHeight,
+    topInset,
+    totalOffset,
+    computedOffset,
+    containerOffsetTop: containerComputedTop,
+    isFullscreen: isFullscreenActive,
+    headerBottom: header.offsetTop + headerHeight
+  });
+  
+  // 如果container的实际位置还是被遮挡，强制设置
+  if (containerComputedTop < headerHeight + topInset) {
+    console.warn('检测到container被遮挡，强制修正');
+    container.style.marginTop = `${totalOffset}px`;
+  }
+}
+
+// 更新全屏按钮状态
+function updateFullscreenButton() {
+  const fs = document.getElementById('fullscreen');
+  if (!fs) return;
+  
+  const icon = fs.querySelector('.menu-icon');
+  const text = fs.querySelector('.menu-text');
+  
+  if (isFullscreenActive) {
+    icon.textContent = '🔳';
+    text.textContent = '退出全屏';
+  } else {
+    icon.textContent = '🔲';
+    text.textContent = '全屏模式';
+  }
+}
+
+// 全屏状态变化监听
+function setupFullscreenListeners() {
+  const fullscreenEvents = ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'msfullscreenchange'];
+  
+  fullscreenEvents.forEach(event => {
+    document.addEventListener(event, () => {
+      isFullscreenActive = !!(
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.mozFullScreenElement ||
+        document.msFullscreenElement
+      );
+      
+      console.log('全屏状态变化:', isFullscreenActive);
+      
+      // 更新全屏按钮状态
+      updateFullscreenButton();
+      
+      // 全屏状态变化时重新计算布局
+      setTimeout(updateDynamicLayout, 100);
+    });
+  });
+}
+
+// === 滚动动画控制 ===
+let lastScrollY = window.scrollY;
+let isScrolling = false;
+let scrollTimeout;
+const scrollThreshold = 40;
+
+function setupScrollAnimation() {
+  const header = document.querySelector('.header');
+  
+  if (!header) return;
+
+  window.addEventListener('scroll', () => {
+    isScrolling = true;
+    clearTimeout(scrollTimeout);
+    
+    scrollTimeout = setTimeout(() => {
+      isScrolling = false;
+    }, 200);
+
+    // 向下滚动且超过阈值时隐藏header
+    if (window.scrollY > lastScrollY && window.scrollY > scrollThreshold) {
+      header.style.transform = 'translateY(-100%)';
+      
+      // 同时收回菜单（如果菜单是打开的）
+      const menuDropdown = document.getElementById('menuDropdown');
+      if (menuDropdown && menuDropdown.classList.contains('show')) {
+        menuDropdown.classList.remove('show');
+        // 移除菜单按钮焦点
+        const menuToggle = document.getElementById('menuToggle');
+        if (menuToggle) {
+          setTimeout(() => menuToggle.blur(), 100);
+        }
+      }
+    } 
+    // 向上滚动时显示
+    else if (window.scrollY < lastScrollY) {
+      header.style.transform = 'translateY(0)';
+    }
+
+    lastScrollY = window.scrollY;
+  });
+}
+
+// 菜单交互逻辑
+async function setupMenuInteractions() {
+  await fileLog('menu','function-start');
+  
+  const menuToggle = document.getElementById('menuToggle');
+  const menuDropdown = document.getElementById('menuDropdown');
+  
+  await fileLog('menu','elements-check',{ 
+    menuToggle: !!menuToggle, 
+    menuDropdown: !!menuDropdown 
+  });
+  
+  if (!menuToggle || !menuDropdown) {
+    await fileLog('menu','elements-missing');
+    return;
+  }
+  
+  // 简化的切换函数
+  function toggleMenu(e) {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
+    const isShown = menuDropdown.classList.contains('show');
+    
+    if (isShown) {
+      // 关闭菜单时，移除焦点（消除绿色描边）
+      menuDropdown.classList.remove('show');
+      setTimeout(() => {
+        if (menuToggle) {
+          menuToggle.blur();
+        }
+      }, 100);
+    } else {
+      // 打开菜单时，保持焦点（显示绿色描边）
+      menuDropdown.classList.add('show');
+      // 重新触发菜单项动画
+      const menuItems = menuDropdown.querySelectorAll('.menu-item');
+      menuItems.forEach((item, index) => {
+        // 重置动画
+        item.style.animation = 'none';
+        // 强制重绘
+        void item.offsetWidth;
+        // 重新设置动画
+        item.style.animation = `menuItemFadeIn 0.3s ease forwards`;
+        item.style.animationDelay = `${(index + 1) * 0.05}s`;
+      });
+    }
+  }
+  
+  // 隐藏菜单
+  function hideMenu() {
+    menuDropdown.classList.remove('show');
+    // 菜单被外部事件关闭时，也移除焦点
+    setTimeout(() => {
+      if (menuToggle) {
+        menuToggle.blur();
+      }
+    }, 100);
+  }
+  
+  // 绑定菜单按钮事件
+  await fileLog('menu','binding-toggle');
+  
+  menuToggle.onclick = function(e) {
+    toggleMenu(e);
+  };
+  
+  // 查找菜单项
+  const menuItems = menuDropdown.querySelectorAll('.menu-item');
+  await fileLog('menu','found-items',{ count: menuItems.length });
+  
+  // 绑定菜单项事件
+  menuItems.forEach((item, index) => {
+    item.onclick = function() {
+      setTimeout(hideMenu, 150);
+    };
+  });
+  
+  // 简化的外部点击处理
+  document.addEventListener('click', function(e) {
+    if (!menuToggle.contains(e.target) && !menuDropdown.contains(e.target)) {
+      hideMenu();
+    }
+  });
+  
+  await fileLog('menu','setup-complete');
+}
+
+// 初始化全屏和布局管理
+function setupFullscreenAndLayout() {
+  // 检测全屏支持
+  checkFullscreenSupport();
+  
+  // 设置全屏事件监听
+  setupFullscreenListeners();
+  
+  // 尝试自动进入全屏（需要用户交互后才能生效）
+  if (isFullscreenSupported) {
+    console.log('全屏模式已支持，可通过用户交互触发');
+    
+    // 添加点击事件来触发全屏
+    let hasTriedFullscreen = false;
+    const tryFullscreen = () => {
+      if (!hasTriedFullscreen && !isFullscreenActive) {
+        hasTriedFullscreen = true;
+        const success = enterFullscreen();
+        if (success) {
+          console.log('已尝试进入全屏模式');
+        }
+      }
+    };
+    
+    // 在用户首次交互时尝试全屏
+    document.addEventListener('click', tryFullscreen, { once: true });
+    document.addEventListener('touchstart', tryFullscreen, { once: true });
+  }
+  
+  // 立即计算初始布局，确保UI组件能正确显示
+  setTimeout(() => {
+    updateDynamicLayout();
+    updateFullscreenButton();
+  }, 0);
+  
+  // 再次确保布局正确（DOM可能还在调整）
+  setTimeout(() => {
+    updateDynamicLayout();
+  }, 100);
+  
+  // 监听窗口大小变化
+  window.addEventListener('resize', () => {
+    setTimeout(updateDynamicLayout, 100);
+  });
+  
+  // 监听方向变化
+  window.addEventListener('orientationchange', () => {
+    setTimeout(updateDynamicLayout, 300);
+  });
+}
+
+// UI组件优先初始化函数
+function setupUIComponents() {
+  // 立即初始化动画系统
+  setupScrollAnimation();
+  setupMenuInteractions();
+  // 立即初始化全屏和布局
+  setupFullscreenAndLayout();
+  // 立即绑定基础事件
+  setupBasicEvents();
+}
+
+// 基础事件绑定（不依赖app列表）
+function setupBasicEvents() {
+  // 搜索框事件
+  const s = searchEl(); 
+  if (s) {
+    s.addEventListener('input', applyFilter);
+  }
+  
+  // 基础按钮事件绑定（不需要等待app列表）
+  const r = $('reload'); 
+  if (r) {
+    const reloadHandler = async () => {
+      // 重新加载时重新排序选中项到前面
+      NEED_SORT_SELECTED = true; // 重新加载时需要排序
+      await init();
+    };
+    r.addEventListener('click', reloadHandler);
+  }
+
+  // 全屏按钮（已经在之前的代码中处理）
+  const fs = $('fullscreen');
+  if (fs) {
+    const fullscreenHandler = () => {
+      if (!isFullscreenSupported) {
+        toast('当前浏览器不支持全屏模式');
+        return;
+      }
+      
+      if (isFullscreenActive) {
+        exitFullscreen();
+        toast('已退出全屏模式');
+      } else {
+        const success = enterFullscreen();
+        if (success) {
+          toast('已进入全屏模式');
+        } else {
+          toast('进入全屏模式失败');
+        }
+      }
+    };
+    fs.addEventListener('click', fullscreenHandler);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => { 
+  // 1. 立即初始化UI组件和布局，不等待数据加载
+  setupUIComponents();
+  
+  // 2. 异步初始化数据和其他功能
+  init(); 
+});

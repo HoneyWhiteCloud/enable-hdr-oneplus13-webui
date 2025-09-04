@@ -1,14 +1,21 @@
 .header{
-  position:sticky; 
+  position:fixed; 
   top:0; 
-  z-index:100; 
-  backdrop-filter:blur(20px);
-  background:rgba(10,12,16,0.85);
-  border-bottom:1px solid var(--border);
-  box-shadow:0 1px 3px var(--shadow);
+  left:0;
+  right:0;
+  z-index:1100; 
+  /* 增强毛玻璃效果 */
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  background: rgba(10,12,16,0.75);
+  border-bottom:1px solid rgba(255,255,255,0.1);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3), 0 1px 0 rgba(255,255,255,0.05) inset;
   /* WebUI管理器状态栏兼容性 - 只在 header 顶部添加安全区域 */
   /* 使用 clamp 限制最小和最大值，确保间距合理 */
   padding-top: clamp(0px, var(--top-inset), 24px);
+  /* 添加滑动动画效果 */
+  transition: transform 0.4s ease;
+  transform: translateY(0);
 }
 
 .header .row{ 

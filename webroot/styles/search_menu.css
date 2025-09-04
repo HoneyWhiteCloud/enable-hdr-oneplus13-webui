@@ -1,39 +1,55 @@
-.search-menu-container{
+.search-container{
   display:flex; 
-  position:sticky; 
-  top:calc(48px + 6px); 
-  width:100%; 
-  padding:6px 10px; 
-  z-index:99;
-}
-
-.search-card{
-  margin:0 auto; 
-  width:100%; 
-  max-width:1100px; 
+  align-items:center;
+  gap:12px;
+  flex:1;
   position:relative;
-  background:var(--card); 
-  border:1px solid #1f2937; 
-  border-radius:10px; 
-  box-shadow:0 2px 6px rgba(0,0,0,.25);
-  display:flex; 
-  align-items:center; 
-  padding:8px 42px 8px 12px;
 }
 
-.search-input{
+#search{
   flex:1; 
   width:100%; 
-  background:transparent; 
-  border:none; 
-  outline:none; 
+  background:var(--card); 
+  border:1px solid var(--border); 
+  border-radius:8px; 
+  box-shadow:0 2px 4px rgba(0,0,0,.2);
+  padding:12px 16px;
   color:var(--fg); 
   font-size:14px;
-  padding:4px 0; 
+  outline:none;
+  transition: all 0.2s ease;
 }
 
-.search-input:focus{
-  outline:none; 
+#search:focus{
+  border-color:var(--accent);
+  box-shadow:0 0 0 2px rgba(35,134,54,0.1);
+}
+
+/* 移动loading和clear-btn到search-container内部 */
+.search-container .loading { 
+  position:absolute; 
+  right:60px; 
+  top:50%; 
+  transform:translateY(-50%); 
+  display:none; 
+  gap:6px; 
+  align-items:center; 
+  color:var(--muted);
+  font-size:12px; 
+  pointer-events:none;
+}
+
+.search-container .loading.show{ 
+  display:flex; 
+}
+
+.search-container .loading svg{
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin{
+  from{transform:translateY(-50%) rotate(0deg);}
+  to{transform:translateY(-50%) rotate(360deg);}
 }
 
 .clear-btn{
@@ -63,39 +79,171 @@
   display:flex; 
 }
 
-.search-card #loading{ 
-  position:absolute; 
-  right:44px; 
-  top:50%; 
-  transform:translateY(-50%); 
-  display:none; 
-  gap:6px; 
-  align-items:center; 
-  color:var(--muted);
-  font-size:12px; 
+/* 菜单按钮样式优化 */
+.menu-container {
+  position: relative;
 }
 
-.search-card #loading.show{ 
-  display:flex; 
+.menu-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 48px;
+  width: 48px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--fg);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
 }
 
-.search-card #loading svg{
-  animation: spin 1s linear infinite;
+.menu-toggle:hover {
+  background: var(--card-hover);
+  border-color: var(--border-hover);
 }
 
-@keyframes spin{
-  from{transform:translateY(-50%) rotate(0deg);}
-  to{transform:translateY(-50%) rotate(360deg);}
+.menu-toggle svg {
+  transition: transform 0.2s ease;
 }
+
+.menu-toggle.menu-open svg {
+  transform: rotate(90deg);
+}
+
+/* 菜单下拉框样式 - 移植自老版本 */
+.menu-dropdown{
+  position:absolute;
+  top:calc(100% + 8px);
+  right:0;
+  min-width:200px;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:12px;
+  box-shadow:0 8px 24px rgba(0,0,0,0.25);
+  opacity:0;
+  visibility:hidden;
+  transform:translateX(10px) translateY(-8px) scale(0.95);
+  transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index:1000;
+  backdrop-filter:blur(20px);
+  /* 确保菜单不会超出视口且不影响页面滚动 */
+  max-width:min(200px, calc(100vw - 32px));
+}
+
+.menu-dropdown.show{
+  opacity:1;
+  visibility:visible;
+  transform:translateX(0) translateY(0) scale(1);
+}
+
+.menu-header{
+  padding:12px 16px 8px;
+  border-bottom:1px solid var(--border);
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+
+.menu-title{
+  font-size:13px;
+  font-weight:600;
+  color:var(--fg-secondary);
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+}
+
+.menu-badge{
+  background:var(--accent);
+  color:white;
+  padding:2px 8px;
+  border-radius:10px;
+  font-size:11px;
+  font-weight:600;
+}
+
+.menu-items{
+  padding:8px 0;
+}
+
+.menu-item{
+  width:100%;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:10px 16px;
+  background:none;
+  border:none;
+  color:var(--fg);
+  cursor:pointer;
+  transition:all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  font-size:14px;
+  text-align:left;
+  outline:none;
+  box-shadow:none;
+  font-family:inherit;
+  line-height:1.5;
+  user-select:none;
+  -webkit-tap-highlight-color:transparent;
+  border-radius:8px;
+  /* 菜单项淡入动画 */
+  opacity: 0;
+  transform: translateY(-10px);
+  animation: menuItemFadeIn 0.3s ease forwards;
+}
+
+/* 为每个菜单项添加递增的延迟 */
+.menu-item:nth-child(1) { animation-delay: 0.05s; }
+.menu-item:nth-child(2) { animation-delay: 0.10s; }
+.menu-item:nth-child(3) { animation-delay: 0.15s; }
+.menu-item:nth-child(4) { animation-delay: 0.20s; }
+.menu-item:nth-child(5) { animation-delay: 0.25s; }
+
+/* 菜单项淡入动画关键帧 */
+@keyframes menuItemFadeIn {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 当菜单隐藏时重置动画 */
+.menu-dropdown:not(.show) .menu-item {
+  animation: none;
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+.menu-item:hover {
+  background: var(--card-hover);
+}
+
+.menu-item.primary {
+  color: var(--accent);
+}
+
+.menu-item.danger {
+  color: var(--danger);
+}
+
+.menu-icon {
+  font-size: 16px;
+  width: 20px;
+  text-align: center;
+}
+
+.menu-text {
+  flex: 1;
+  font-size: 14px;
+}
+
 
 /* 响应式设计 */
 @media (max-width:600px){
-  .search-menu-container{
-    padding:4px 8px;
-  }
-  
-  .search-card{
-    padding:6px 36px 6px 10px;
+  .search-container .loading{
+    right:36px;
   }
   
   .clear-btn{
@@ -104,7 +252,8 @@
     right:6px;
   }
   
-  .search-card #loading{
-    right:36px;
+  .menu-toggle {
+    width: 44px;
+    height: 44px;
   }
 }
