@@ -1,8 +1,10 @@
-// ==== HDR WebUI main.js — Fast start + correct preselect ====
+// ==== HDR WebUI main.js — Core Logic Functions ====
 // 用法：<script type="module" src="scripts/main.js"></script>
 import { exec, spawn, toast } from './assets/kernelsu.js';
 import { t, initI18n, applyI18n } from './i18n.js';
 import { mergeXMLFiles, checkBackupFiles, getConfigStatus } from './xml-merger.js';
+import { uiController, setupDOMContentLoaded, setupWindowEvents } from './ui-controller.js';
+import { fileLog, logger, clearLogOnStartup } from './logger-service.js';
 
 const MODULE_DIR    = '/data/adb/modules/enable-hdr-oneplus13-webui';
 const APP_LIST_XMLS = [
@@ -12,12 +14,13 @@ const LOG_PATH      = `${MODULE_DIR}/webui.log`;
 const CACHE_PATH    = `${MODULE_DIR}/app_cache.json`; // 应用名称缓存文件
 // 移除 LOG_MAX_BYTES，因为每次启动都会清除日志
 
-const $ = (id) => document.getElementById(id);
-const listEl   = () => document.getElementById('list') || document.getElementById('applist');
-const emptyEl  = () => document.getElementById('empty');
-const searchEl = () => document.getElementById('search');
-const loadEl   = () => document.getElementById('loading');
-const countEl  = () => document.getElementById('count');
+// DOM元素获取函数现在由UI控制器提供
+const $ = (id) => uiController.$(id);
+const listEl   = () => uiController.listEl();
+const emptyEl  = () => uiController.emptyEl();
+const searchEl = () => uiController.searchEl();
+const loadEl   = () => uiController.loadEl();
+const countEl  = () => uiController.countEl();
 
 // 状态
 let APPS = [];             // [{ pkg, name, apk?, labeled:boolean }]
@@ -29,22 +32,10 @@ let LABEL_CACHE = new Map(); // 内存中的应用名称缓存 pkg -> name
 let PERSISTENT_CACHE = new Map(); // 从文件读取的持久化缓存 pkg -> {name, timestamp}
 let CACHE_DIRTY = false; // 缓存是否有未保存的更改
 let AUTO_SAVE_ENABLED = true; // 是否启用自动保存功能
-let IS_FIRST_RENDER = true; // 标记是否为首次渲染
+// IS_FIRST_RENDER 现在由UI控制器管理
 
-// 状态栏管理
-let STATUS_BAR = {
-  totalApps: 0,
-  labeledApps: 0,
-  isFirstTime: false,
-  isChecking: false,
-  isCompleted: false,
-  failedApps: 0,
-  showStuckTip: false,
-  stuckTipTimer: null,
-  startTime: null,
-  lastProgressTime: null,
-  lastLabeledCount: 0
-};
+// 状态栏管理现在由UI控制器处理
+let STATUS_BAR = uiController.STATUS_BAR;
 
 // 超时和失败管理
 const MAX_RETRY_COUNT = 3; // 最大尝试次数
@@ -71,87 +62,13 @@ async function runExec(cmd, opts){
   catch(e){ return { errno: 1, stdout: '', stderr: String(e) }; }
 }
 
-// 状态栏更新函数
+// 状态栏更新函数现在由UI控制器处理
 function updateStatusBar() {
-  const statusTextEl = document.getElementById('statusText');
-  if (!statusTextEl) return;
-
-  const now = Date.now();
-  
-  // 检查进度是否有更新
-  if (STATUS_BAR.labeledApps !== STATUS_BAR.lastLabeledCount) {
-    STATUS_BAR.lastLabeledCount = STATUS_BAR.labeledApps;
-    STATUS_BAR.lastProgressTime = now;
-    
-    // 进度有更新，清除之前的提示和定时器
-    if (STATUS_BAR.showStuckTip) {
-      STATUS_BAR.showStuckTip = false;
-    }
-    if (STATUS_BAR.stuckTipTimer) {
-      clearTimeout(STATUS_BAR.stuckTipTimer);
-      STATUS_BAR.stuckTipTimer = null;
-    }
-  }
-
-  let message = '';
-  
-  if (STATUS_BAR.isCompleted) {
-    if (STATUS_BAR.failedApps > 0) {
-      message = t('statusCompleteWithFailed', { failedApps: STATUS_BAR.failedApps });
-    } else {
-      message = t('statusAllComplete');
-    }
-  } else if (STATUS_BAR.showStuckTip) {
-    message = `💡 提示：如果长时间卡住不动，可以尝试退出重进 (${STATUS_BAR.labeledApps}/${STATUS_BAR.totalApps})`;
-  } else if (STATUS_BAR.isFirstTime) {
-    if (STATUS_BAR.totalApps > 0) {
-      message = t('statusFirstTimeMatching', { labeledApps: STATUS_BAR.labeledApps, totalApps: STATUS_BAR.totalApps });
-    } else {
-      message = t('statusFirstTimeMatchingNoCount');
-    }
-  } else if (STATUS_BAR.isChecking) {
-    if (STATUS_BAR.totalApps > 0) {
-      message = t('statusCheckingChanges', { labeledApps: STATUS_BAR.labeledApps, totalApps: STATUS_BAR.totalApps });
-    } else {
-      message = t('statusCheckingChangesNoCount');
-    }
-  } else {
-    message = t('statusInitializing');
-  }
-
-  statusTextEl.textContent = message;
-  
-  // 基于进度更新时间的卡住提示逻辑
-  if ((STATUS_BAR.isFirstTime || STATUS_BAR.isChecking) && !STATUS_BAR.isCompleted && !STATUS_BAR.stuckTipTimer && STATUS_BAR.lastProgressTime) {
-    STATUS_BAR.stuckTipTimer = setTimeout(() => {
-      // 检查是否真的5秒没有进度更新
-      const timeSinceLastProgress = Date.now() - STATUS_BAR.lastProgressTime;
-      if (timeSinceLastProgress >= 5000 && !STATUS_BAR.isCompleted) {
-        STATUS_BAR.showStuckTip = true;
-        updateStatusBar();
-      }
-    }, 5000); // 5秒后检查
-  }
+  uiController.updateStatusBar();
 }
 
 // ---------- logging ----------
-function nowISO(){ try { return new Date().toISOString(); } catch(_) { return ''; } }
-function esc(s){ return String(s).replace(/\\/g,'\\\\').replace(/"/g,'\\"').replace(/\n/g,'\\n').replace(/\r/g,'\\r'); }
-
-// 每次启动时清除旧日志
-async function clearLogOnStartup(){
-  try{
-    await runExec(`sh -c 'rm -f "${LOG_PATH}" "${LOG_PATH}.1" 2>/dev/null || true'`);
-  }catch(_){}
-}
-
-async function fileLog(stage,msg,data){
-  try{
-    const line = JSON.stringify({ ts: nowISO(), stage: stage||'', msg: msg||'', data: (data===undefined?null:data) });
-    // 简化版：直接追加到日志文件，不需要大小检查
-    await runExec(`sh -c 'printf "%s\\n" "${esc(line)}" >> "${LOG_PATH}"'`);
-  }catch(_){}
-}
+// 日志管理现在由独立的日志服务处理
 
 // ---------- 持久化缓存管理 ----------
 // 初始化缓存文件（如果不存在则创建空文件）
@@ -500,18 +417,9 @@ function setupCacheAutoSave() {
     }
   }, 5 * 60 * 1000);
 }
-function showLoading(show){ const el=loadEl(); if(el) el.style.display = show?'':'none'; }
-function setCount(sel,total){ 
-  const el=countEl(); 
-  if(el) {
-    if (sel === 0) {
-      el.style.display = 'none';
-    } else {
-      el.style.display = 'inline-block';
-      el.textContent = `${sel} / ${total}`;
-    }
-  }
-}
+// UI显示控制函数现在由UI控制器处理
+function showLoading(show) { uiController.showLoading(show); }
+function setCount(sel, total) { uiController.setCount(sel, total); }
 
 // 菜单交互逻辑 - 已移除，使用setupMenuAnimation代替
 
@@ -1428,164 +1336,53 @@ function setupPeriodicCacheSave() {
   setInterval(periodicCacheSave, 30000);
 }
 
-// ---------- 渲染 & 懒加载名称（IntersectionObserver） ——
-let OBSERVER = null; // 初始化 OBSERVER 变量
-OBSERVER = new IntersectionObserver((entries) => {
-  for (const e of entries) {
-    if (e.isIntersecting) {
-      const pkg = e.target.getAttribute('data-pkg');
-      const app = APP_MAP.get(pkg);
-      if (app && !app.labeled) {
-        LABEL_QUEUE.push(app);
-        runLabelWorkers();
+// ---------- IntersectionObserver 初始化 ——
+let OBSERVER = null;
+function initObserver() {
+  OBSERVER = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (e.isIntersecting) {
+        const pkg = e.target.getAttribute('data-pkg');
+        const app = APP_MAP.get(pkg);
+        if (app && !app.labeled) {
+          LABEL_QUEUE.push(app);
+          runLabelWorkers();
+        }
       }
     }
-  }
-}, { root: null, rootMargin: '100px', threshold: 0 });
-
-// 渲染应用列表
-function render(apps){
-  const L = listEl(); if (!L) return;
-  L.innerHTML = '';
-  
-  // 只在首次渲染时添加动画类
-  if (IS_FIRST_RENDER) {
-    L.classList.add('first-load');
-    // 确保列表动画完成后标记完成状态
-    setTimeout(() => {
-      L.classList.add('first-load-complete');
-    }, 800);
-  } else {
-    L.classList.remove('first-load');
-  }
-  
-  const tpl = document.getElementById('card');
-
-  // 智能排序：只在需要时将已选应用排到前面
-  let sortedApps = [...apps];
-  if (NEED_SORT_SELECTED) {
-    sortedApps = apps.sort((a, b) => {
-      if (SELECTED.has(a.pkg) && !SELECTED.has(b.pkg)) return -1;
-      if (!SELECTED.has(a.pkg) && SELECTED.has(b.pkg)) return 1;
-      return 0;
-    });
-    // 排序完成后重置标志
-    NEED_SORT_SELECTED = false;
-  }
-
-  // 注销旧 observer
-  if (OBSERVER){ try{ OBSERVER.disconnect(); }catch(_){ } }
-  
-  // 为每个应用项绑定 IntersectionObserver
-  for (const [index, app] of sortedApps.entries()){
-    let node;
-    if (tpl && tpl.content && tpl.content.firstElementChild){
-      node = tpl.content.firstElementChild.cloneNode(true);
-    } else {
-      node = document.createElement('div');
-      node.className = 'card';
-      node.innerHTML = `
-        <input type="checkbox" class="checkbox" />
-        <div class="info">
-          <div class="name"></div>
-          <div class="pkg"></div>
-        </div>`;
-    }
-    node.setAttribute('data-pkg', app.pkg);
-    
-    // 只在首次渲染时添加动画类和延迟
-    if (IS_FIRST_RENDER) {
-      node.classList.add('first-load');
-      // 为卡片设置动画延迟和索引
-      node.style.setProperty('--card-index', index);
-      // 简化延迟计算，更快速的动画
-      const maxDelay = Math.min(index * 0.03, 0.8); // 最大延迟0.8秒
-      node.style.setProperty('--animation-delay', `${maxDelay + 0.2}s`);
-    }
-
-    const nameEl = node.querySelector('.name');
-    const pkgEl  = node.querySelector('.pkg');
-    const cb     = node.querySelector('.checkbox');
-
-    if (nameEl) nameEl.textContent = app.name || app.pkg;
-    if (pkgEl)  pkgEl.textContent  = app.pkg;
-
-    if (cb){
-      cb.checked = SELECTED.has(app.pkg);  // 预勾选 ✅
-      
-      // 复选框变化处理函数
-      const handleToggle = async () => {
-        if (cb.checked) {
-          SELECTED.add(app.pkg);
-        } else {
-          SELECTED.delete(app.pkg);
-        }
-        setCount(SELECTED.size, APPS.length);
-        // 注意：这里不重新排序，只有保存和重新加载时才排序
-        
-        // 实时保存到XML文件
-        if (AUTO_SAVE_ENABLED) {
-          await saveSelectedRealtime();
-        }
-      };
-      
-      // 绑定复选框变化事件
-      cb.onchange = handleToggle;
-      
-      // 绑定整个卡片的点击事件
-      node.onclick = (e) => {
-        // 如果直接点击的是复选框，不要重复处理
-        if (e.target === cb) return;
-        
-        // 切换复选框状态
-        cb.checked = !cb.checked;
-        // 手动触发处理函数
-        handleToggle();
-      };
-    }
-
-    L.appendChild(node);
-    // 观察进入视口后再补齐真实名称
-    OBSERVER.observe(node);
-  }
-
-  setCount(SELECTED.size, APPS.length);
-  
-  // 只有当应用列表真正准备好并且是首次渲染时，才将标记设为false
-  // 延迟设置，确保动画能够正确播放
-  if (IS_FIRST_RENDER && apps.length > 0) {
-    setTimeout(() => {
-      IS_FIRST_RENDER = false;
-    }, 1000); // 1秒后再设为false，确保动画完成
-  }
+  }, { root: null, rootMargin: '100px', threshold: 0 });
 }
 
-// ---------- 过滤 ---------- 
+// 渲染应用列表现在由UI控制器处理
+function render(apps) {
+  const result = uiController.render(apps, SELECTED, NEED_SORT_SELECTED, OBSERVER);
+  if (result && result.NEED_SORT_SELECTED !== undefined) {
+    NEED_SORT_SELECTED = result.NEED_SORT_SELECTED;
+  }
+
+  // 重新绑定复选框事件
+  uiController.bindCheckboxEvents(APPS, SELECTED, AUTO_SAVE_ENABLED, saveSelectedRealtime);
+}
+
+// ---------- 过滤 ----------
 function applyFilter(){
-  const q = (searchEl()?.value || '').trim().toLowerCase();
-  FILTER_Q = q;
-  if (!q) return render(APPS);
-  const filtered = APPS.filter(a =>
-    (a.pkg||'').toLowerCase().includes(q) ||
-    (a.name||'').toLowerCase().includes(q)
-  );
-  render(filtered);
+  FILTER_Q = uiController.applyFilter(APPS, FILTER_Q, render);
 }
 
-// ---------- 初始化 ---------- 
+// ---------- 初始化 ----------
 async function init(){
   // 初始化国际化
   initI18n();
   applyI18n();
-  
+
   // 每次启动时清除旧日志
   await clearLogOnStartup();
-  
+
   await fileLog('init','start',{ ua:(navigator?.userAgent)||'', url:(location?.href)||'' });
-  
+
   // 初始化状态栏
   updateStatusBar();
-  
+
   showLoading(true);
   try{
     // 1) 确保必要的文件存在（app_cache.json、appList.xml 和 appList_new.xml）
@@ -1625,17 +1422,18 @@ async function init(){
     STATUS_BAR.lastProgressTime = Date.now();
     STATUS_BAR.lastLabeledCount = STATUS_BAR.labeledApps;
     updateStatusBar();
-    
+
     // 5) 重新加载时需要排序
     NEED_SORT_SELECTED = true;
-    
-    // 6) 先立即渲染列表（使用缓存+包名），不阻塞UI
+
+    // 6) 初始化Observer和渲染列表
+    initObserver();
     render(APPS);
 
-    // 7) 立即设置菜单和搜索框交互（最高优先级，防止阻塞）
+    // 7) UI控制器设置菜单和搜索框交互（最高优先级，防止阻塞）
     await fileLog('menu','setup-start');
     try {
-      await setupMenuInteractions();
+      await uiController.setupMenuInteractions();
       await fileLog('menu','setup-success');
     } catch(e) {
       await fileLog('menu','setup-error',{ error: String(e) });
@@ -1743,13 +1541,12 @@ async function init(){
   }
 
   
-  // 注意：搜索框和重新加载按钮的事件绑定已在setupBasicEvents中处理
-  
-  const sa = $('selectAll'); 
+  // 绑定应用操作按钮事件
+  const sa = $('selectAll');
   if (sa) {
-    const selectAllHandler = async () => { 
-      APPS.forEach(a=>SELECTED.add(a.pkg)); 
-      applyFilter(); 
+    const selectAllHandler = async () => {
+      APPS.forEach(a=>SELECTED.add(a.pkg));
+      applyFilter();
       // 实时保存到XML文件
       if (AUTO_SAVE_ENABLED) {
         await saveSelectedRealtime();
@@ -1758,12 +1555,12 @@ async function init(){
     };
     sa.addEventListener('click', selectAllHandler);
   }
-  
-  const da = $('deselectAll'); 
+
+  const da = $('deselectAll');
   if (da) {
-    const deselectAllHandler = async () => { 
-      SELECTED.clear(); 
-      applyFilter(); 
+    const deselectAllHandler = async () => {
+      SELECTED.clear();
+      applyFilter();
       // 实时保存到XML文件
       if (AUTO_SAVE_ENABLED) {
         await saveSelectedRealtime();
@@ -1772,15 +1569,15 @@ async function init(){
     };
     da.addEventListener('click', deselectAllHandler);
   }
-  
-  const sv = $('save'); 
+
+  const sv = $('save');
   if (sv) {
     const saveHandler = async () => {
       await saveSelected();
     };
     sv.addEventListener('click', saveHandler);
   }
-  
+
   const rb = $('reboot');
   if (rb) {
     const rebootHandler = async () => {
@@ -1797,439 +1594,30 @@ async function init(){
     rb.addEventListener('click', rebootHandler);
   }
 
-  // 注意：全屏按钮的事件绑定已在setupBasicEvents中处理
-}
-
-// 动态调整顶部间距的函数
-function adjustTopInset() {
-  const header = document.querySelector('.header');
-  if (!header) return;
-  
-  // 获取当前的安全区域值
-  const currentTopInset = getComputedStyle(document.documentElement)
-    .getPropertyValue('--window-inset-top');
-  
-  // 如果安全区域值过大，则限制它
-  if (currentTopInset && currentTopInset !== '0px') {
-    const insetValue = parseInt(currentTopInset);
-    if (insetValue > 48) { // 如果超过48px，则限制为24px
-      document.documentElement.style.setProperty('--top-inset', '24px');
-    }
-  }
-  
-  // 根据屏幕高度动态调整
-  const screenHeight = window.innerHeight;
-  if (screenHeight < 600) {
-    // 小屏幕设备，减少顶部间距
-    header.style.paddingTop = 'clamp(0px, var(--top-inset), 16px)';
-  } else if (screenHeight > 800) {
-    // 大屏幕设备，可以适当增加间距
-    header.style.paddingTop = 'clamp(0px, var(--top-inset), 32px)';
-  } else {
-    // 中等屏幕，使用默认值
-    header.style.paddingTop = 'clamp(0px, var(--top-inset), 24px)';
-  }
-}
-
-// 页面加载完成后调整间距
-document.addEventListener('DOMContentLoaded', function() {
-  adjustTopInset();
-  
-  // 监听窗口大小变化
-  window.addEventListener('resize', adjustTopInset);
-  
-  // 监听WebUI管理器的状态栏变化
-  if (window.WebUI) {
-    window.WebUI.addEventListener('statusbar', adjustTopInset);
-  }
-});
-
-// 导出函数供其他模块使用
-window.adjustTopInset = adjustTopInset;
-
-// === 全屏和布局控制 ===
-let isFullscreenSupported = false;
-let isFullscreenActive = false;
-
-// 检测全屏API支持
-function checkFullscreenSupport() {
-  isFullscreenSupported = !!(
-    document.fullscreenEnabled ||
-    document.webkitFullscreenEnabled ||
-    document.mozFullScreenEnabled ||
-    document.msFullscreenEnabled
-  );
-  return isFullscreenSupported;
-}
-
-// 进入全屏模式
-function enterFullscreen() {
-  if (!isFullscreenSupported) return false;
-  
-  const docEl = document.documentElement;
-  try {
-    if (docEl.requestFullscreen) {
-      docEl.requestFullscreen();
-    } else if (docEl.webkitRequestFullscreen) {
-      docEl.webkitRequestFullscreen();
-    } else if (docEl.mozRequestFullScreen) {
-      docEl.mozRequestFullScreen();
-    } else if (docEl.msRequestFullscreen) {
-      docEl.msRequestFullscreen();
-    }
-    return true;
-  } catch (error) {
-    console.log('全屏模式请求失败:', error);
-    return false;
-  }
-}
-
-// 退出全屏模式
-function exitFullscreen() {
-  try {
-    if (document.exitFullscreen) {
-      document.exitFullscreen();
-    } else if (document.webkitExitFullscreen) {
-      document.webkitExitFullscreen();
-    } else if (document.mozCancelFullScreen) {
-      document.mozCancelFullScreen();
-    } else if (document.msExitFullscreen) {
-      document.msExitFullscreen();
-    }
-    return true;
-  } catch (error) {
-    console.log('退出全屏失败:', error);
-    return false;
-  }
-}
-
-// 动态计算并设置容器偏移量
-function updateDynamicLayout() {
-  const header = document.querySelector('.header');
-  const container = document.querySelector('.container');
-  
-  if (!header || !container) return;
-
-  // 获取header的实际高度
-  const headerRect = header.getBoundingClientRect();
-  const headerHeight = headerRect.height;
-  
-  // 获取当前的安全区域值
-  const topInset = parseInt(getComputedStyle(document.documentElement)
-    .getPropertyValue('--top-inset').replace('px', '')) || 0;
-  
-  // 计算总偏移量：header高度 + 安全区域 + 额外间距
-  const totalOffset = headerHeight + topInset + 25;
-  
-  // 设置CSS变量
-  document.documentElement.style.setProperty('--dynamic-header-offset', `${totalOffset}px`);
-  
-  // 验证CSS变量是否实际应用
-  const computedOffset = getComputedStyle(document.documentElement)
-    .getPropertyValue('--dynamic-header-offset');
-  const containerComputedTop = container.offsetTop;
-  
-  console.log('布局调试信息:', {
-    headerHeight,
-    topInset,
-    totalOffset,
-    computedOffset,
-    containerOffsetTop: containerComputedTop,
-    isFullscreen: isFullscreenActive,
-    headerBottom: header.offsetTop + headerHeight
-  });
-  
-  // 如果container的实际位置还是被遮挡，强制设置
-  if (containerComputedTop < headerHeight + topInset) {
-    console.warn('检测到container被遮挡，强制修正');
-    container.style.marginTop = `${totalOffset}px`;
-  }
-}
-
-// 更新全屏按钮状态
-function updateFullscreenButton() {
-  const fs = document.getElementById('fullscreen');
-  if (!fs) return;
-  
-  const icon = fs.querySelector('.menu-icon');
-  const text = fs.querySelector('.menu-text');
-  
-  if (isFullscreenActive) {
-    icon.textContent = '🔳';
-    text.textContent = '退出全屏';
-  } else {
-    icon.textContent = '🔲';
-    text.textContent = '全屏模式';
-  }
-}
-
-// 全屏状态变化监听
-function setupFullscreenListeners() {
-  const fullscreenEvents = ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'msfullscreenchange'];
-  
-  fullscreenEvents.forEach(event => {
-    document.addEventListener(event, () => {
-      isFullscreenActive = !!(
-        document.fullscreenElement ||
-        document.webkitFullscreenElement ||
-        document.mozFullScreenElement ||
-        document.msFullscreenElement
-      );
-      
-      console.log('全屏状态变化:', isFullscreenActive);
-      
-      // 更新全屏按钮状态
-      updateFullscreenButton();
-      
-      // 全屏状态变化时重新计算布局
-      setTimeout(updateDynamicLayout, 100);
-    });
-  });
-}
-
-// === 滚动动画控制 ===
-let lastScrollY = window.scrollY;
-let isScrolling = false;
-let scrollTimeout;
-const scrollThreshold = 40;
-
-function setupScrollAnimation() {
-  const header = document.querySelector('.header');
-  
-  if (!header) return;
-
-  window.addEventListener('scroll', () => {
-    isScrolling = true;
-    clearTimeout(scrollTimeout);
-    
-    scrollTimeout = setTimeout(() => {
-      isScrolling = false;
-    }, 200);
-
-    // 向下滚动且超过阈值时隐藏header
-    if (window.scrollY > lastScrollY && window.scrollY > scrollThreshold) {
-      header.style.transform = 'translateY(-100%)';
-      
-      // 同时收回菜单（如果菜单是打开的）
-      const menuDropdown = document.getElementById('menuDropdown');
-      if (menuDropdown && menuDropdown.classList.contains('show')) {
-        menuDropdown.classList.remove('show');
-        // 移除菜单按钮焦点
-        const menuToggle = document.getElementById('menuToggle');
-        if (menuToggle) {
-          setTimeout(() => menuToggle.blur(), 100);
-        }
-      }
-    } 
-    // 向上滚动时显示
-    else if (window.scrollY < lastScrollY) {
-      header.style.transform = 'translateY(0)';
-    }
-
-    lastScrollY = window.scrollY;
-  });
-}
-
-// 菜单交互逻辑
-async function setupMenuInteractions() {
-  await fileLog('menu','function-start');
-  
-  const menuToggle = document.getElementById('menuToggle');
-  const menuDropdown = document.getElementById('menuDropdown');
-  
-  await fileLog('menu','elements-check',{ 
-    menuToggle: !!menuToggle, 
-    menuDropdown: !!menuDropdown 
-  });
-  
-  if (!menuToggle || !menuDropdown) {
-    await fileLog('menu','elements-missing');
-    return;
-  }
-  
-  // 简化的切换函数
-  function toggleMenu(e) {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-    
-    const isShown = menuDropdown.classList.contains('show');
-    
-    if (isShown) {
-      // 关闭菜单时，移除焦点（消除绿色描边）
-      menuDropdown.classList.remove('show');
-      setTimeout(() => {
-        if (menuToggle) {
-          menuToggle.blur();
-        }
-      }, 100);
-    } else {
-      // 打开菜单时，保持焦点（显示绿色描边）
-      menuDropdown.classList.add('show');
-      // 重新触发菜单项动画
-      const menuItems = menuDropdown.querySelectorAll('.menu-item');
-      menuItems.forEach((item, index) => {
-        // 重置动画
-        item.style.animation = 'none';
-        // 强制重绘
-        void item.offsetWidth;
-        // 重新设置动画
-        item.style.animation = `menuItemFadeIn 0.3s ease forwards`;
-        item.style.animationDelay = `${(index + 1) * 0.05}s`;
-      });
-    }
-  }
-  
-  // 隐藏菜单
-  function hideMenu() {
-    menuDropdown.classList.remove('show');
-    // 菜单被外部事件关闭时，也移除焦点
-    setTimeout(() => {
-      if (menuToggle) {
-        menuToggle.blur();
-      }
-    }, 100);
-  }
-  
-  // 绑定菜单按钮事件
-  await fileLog('menu','binding-toggle');
-  
-  menuToggle.onclick = function(e) {
-    toggleMenu(e);
-  };
-  
-  // 查找菜单项
-  const menuItems = menuDropdown.querySelectorAll('.menu-item');
-  await fileLog('menu','found-items',{ count: menuItems.length });
-  
-  // 绑定菜单项事件
-  menuItems.forEach((item, index) => {
-    item.onclick = function() {
-      setTimeout(hideMenu, 150);
-    };
-  });
-  
-  // 简化的外部点击处理
-  document.addEventListener('click', function(e) {
-    if (!menuToggle.contains(e.target) && !menuDropdown.contains(e.target)) {
-      hideMenu();
-    }
-  });
-  
-  await fileLog('menu','setup-complete');
-}
-
-// 初始化全屏和布局管理
-function setupFullscreenAndLayout() {
-  // 检测全屏支持
-  checkFullscreenSupport();
-  
-  // 设置全屏事件监听
-  setupFullscreenListeners();
-  
-  // 尝试自动进入全屏（需要用户交互后才能生效）
-  if (isFullscreenSupported) {
-    console.log('全屏模式已支持，可通过用户交互触发');
-    
-    // 添加点击事件来触发全屏
-    let hasTriedFullscreen = false;
-    const tryFullscreen = () => {
-      if (!hasTriedFullscreen && !isFullscreenActive) {
-        hasTriedFullscreen = true;
-        const success = enterFullscreen();
-        if (success) {
-          console.log('已尝试进入全屏模式');
-        }
-      }
-    };
-    
-    // 在用户首次交互时尝试全屏
-    document.addEventListener('click', tryFullscreen, { once: true });
-    document.addEventListener('touchstart', tryFullscreen, { once: true });
-  }
-  
-  // 立即计算初始布局，确保UI组件能正确显示
-  setTimeout(() => {
-    updateDynamicLayout();
-    updateFullscreenButton();
-  }, 0);
-  
-  // 再次确保布局正确（DOM可能还在调整）
-  setTimeout(() => {
-    updateDynamicLayout();
-  }, 100);
-  
-  // 监听窗口大小变化
-  window.addEventListener('resize', () => {
-    setTimeout(updateDynamicLayout, 100);
-  });
-  
-  // 监听方向变化
-  window.addEventListener('orientationchange', () => {
-    setTimeout(updateDynamicLayout, 300);
-  });
-}
-
-// UI组件优先初始化函数
-function setupUIComponents() {
-  // 立即初始化动画系统
-  setupScrollAnimation();
-  setupMenuInteractions();
-  // 立即初始化全屏和布局
-  setupFullscreenAndLayout();
-  // 立即绑定基础事件
-  setupBasicEvents();
-}
-
-// 基础事件绑定（不依赖app列表）
-function setupBasicEvents() {
-  // 搜索框事件
-  const s = searchEl(); 
-  if (s) {
-    s.addEventListener('input', applyFilter);
-  }
-  
-  // 基础按钮事件绑定（不需要等待app列表）
-  const r = $('reload'); 
-  if (r) {
-    const reloadHandler = async () => {
-      // 重新加载时重新排序选中项到前面
-      NEED_SORT_SELECTED = true; // 重新加载时需要排序
+  // 设置UI控制器的回调函数
+  uiController.setCallbacks({
+    applyFilter: applyFilter,
+    reload: async () => {
+      NEED_SORT_SELECTED = true;
       await init();
-    };
-    r.addEventListener('click', reloadHandler);
-  }
-
-  // 全屏按钮（已经在之前的代码中处理）
-  const fs = $('fullscreen');
-  if (fs) {
-    const fullscreenHandler = () => {
-      if (!isFullscreenSupported) {
-        toast('当前浏览器不支持全屏模式');
-        return;
-      }
-      
-      if (isFullscreenActive) {
-        exitFullscreen();
-        toast('已退出全屏模式');
-      } else {
-        const success = enterFullscreen();
-        if (success) {
-          toast('已进入全屏模式');
-        } else {
-          toast('进入全屏模式失败');
-        }
-      }
-    };
-    fs.addEventListener('click', fullscreenHandler);
-  }
+    }
+  });
 }
 
-document.addEventListener('DOMContentLoaded', () => { 
+// UI相关函数现在由UI控制器处理
+
+// 全屏和布局控制现在由UI控制器处理
+
+// UI组件和事件处理现在由UI控制器和新的初始化逻辑处理
+
+// 新的页面加载事件处理
+setupDOMContentLoaded(() => {
   // 1. 立即初始化UI组件和布局，不等待数据加载
-  setupUIComponents();
-  
+  uiController.setupUIComponents();
+
   // 2. 异步初始化数据和其他功能
-  init(); 
+  init();
 });
+
+// 设置窗口事件
+setupWindowEvents(uiController);

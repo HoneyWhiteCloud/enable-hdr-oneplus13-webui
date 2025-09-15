@@ -93,6 +93,34 @@
   }
 }
 
+/* 横屏模式特殊处理 - 确保状态栏始终居中 */
+@media (orientation: landscape) {
+  /* 横屏时status-bar所在的row保持居中 */
+  .header .row:has(.status-bar) {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  /* 确保status-bar内容居中 */
+  .status-bar {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+  }
+}
+
+/* 横屏且小屏幕的组合情况 */
+@media (orientation: landscape) and (max-width: 600px) {
+  /* 重置第三行的布局，让状态栏保持居中 */
+  .header .row:has(.status-bar) {
+    flex-direction: row !important;
+    justify-content: center !important;
+    align-items: center !important;
+  }
+}
+
 /* WebUI-X 特定优化 */
 @media (max-width: 480px) {
   .header {
