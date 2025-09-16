@@ -47,6 +47,11 @@ How to use it?
 We recommend using [WebUI-X-Portable](https://github.com/MMRLApp/WebUI-X-Portable) as the webUI manager for Magisk/Delta/Kitsune/KernelSU users. 
 For platforms like SukiSU Ultra that allow you to change the webUI engine, use "Auto Select" or "Force WebUI X."
 
+# Acknowledgements
+ - TrickyAddonModule (https://github.com/KOWX712/Tricky-Addon-Update-Target-List) **Provide WebUI reference**
+ - enable-hdr-oneplus13 (https://github.com/oxford232/enable-hdr-oneplus13) **Initial Project**
+
+
 
 
 
