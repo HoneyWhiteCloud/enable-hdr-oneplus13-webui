@@ -47,9 +47,10 @@ WebUI
 推荐magisk/Delta/Kitsune/KernelSU用户使用[WebUI-X-Portable](https://github.com/MMRLApp/WebUI-X-Portable)作为webui的管理器
 SukiSU Ultra等可以变更webui引擎的则使用“自动选择”或者"强制使用WebUI X"
 
-#鸣谢
+# 鸣谢
  - TrickyAddonModule (https://github.com/KOWX712/Tricky-Addon-Update-Target-List) 提供WebUI参考
  - enable-hdr-oneplus13 (https://github.com/oxford232/enable-hdr-oneplus13) 最初项目
+
 
 
 
