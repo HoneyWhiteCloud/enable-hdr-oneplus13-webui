@@ -1,7 +1,7 @@
 id=enable-hdr-oneplus13-webui
 name=Enable HDR for OnePlus 13 (WebUI)
-version=v1.6.0
-versionCode=1600
+version=v1.6.4
+versionCode=1640
 author=Oxford,HoneyWhiteCloud,FTReey@coolapk
-description=Allow more apps to enable HDR on OnePlus 13 with Web Interface support for both Magisk and KernelSU. Access via module manager WebUI or /data/adb/modules/enable-hdr-oneplus13-webui/webroot/
+description=为一加13添加额外APP包名至其HDR白名单的模块，自带WebUI方便管理包名，理论上适用于有HDR白名单的ColorOS/OxygenOS系统的机器（请自行测试）
 updateJson=
