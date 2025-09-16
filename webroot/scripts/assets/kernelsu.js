@@ -121,13 +121,20 @@ export function spawn(command, args = [], options = {}) {
  * @returns {void}
  */
 export function toast(message) {
+    const DEBUG_MODE = false; // 调试模式
+
     try {
-        if (typeof ksu !== 'undefined') {
+        if (typeof ksu !== 'undefined' && ksu.toast) {
             ksu.toast(message);
         } else {
-            console.log(message);
+            if (DEBUG_MODE) {
+                console.log("[TOAST]", message);
+            }
         }
-    } catch (error) {   
+    } catch (error) {
         console.error("Error displaying toast:", error);
+        if (DEBUG_MODE) {
+            console.log("[TOAST]", message);
+        }
     }
 }

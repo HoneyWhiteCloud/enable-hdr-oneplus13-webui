@@ -1,5 +1,6 @@
 // ==== HDR WebUI UI Controller ====
 // UI控制和页面显示相关功能分离模块
+// 应用图标显示功能基于 TrickyAddonModule-v4.1 的 applist 代码进行二次开发
 // 用法：import { UIController } from './ui-controller.js';
 
 import { t } from './i18n.js';
@@ -36,6 +37,10 @@ export class UIController {
 
     // 标记是否为首次渲染
     this.IS_FIRST_RENDER = true;
+
+    // 应用图标缓存
+    this.iconCache = new Map();
+    this.iconLoadPromises = new Map(); // 防止重复加载
 
     // 初始化UI控制器
     this.init();
@@ -182,11 +187,14 @@ export class UIController {
         node = document.createElement('div');
         node.className = 'card';
         node.innerHTML = `
-          <input type="checkbox" class="checkbox" />
+          <div class="icon">
+            <img class="app-icon" src="" alt="App Icon" />
+          </div>
           <div class="info">
             <div class="name"></div>
             <div class="pkg"></div>
-          </div>`;
+          </div>
+          <input type="checkbox" class="checkbox" />`;
       }
       node.setAttribute('data-pkg', app.pkg);
 
@@ -200,12 +208,27 @@ export class UIController {
         node.style.setProperty('--animation-delay', `${maxDelay + 0.2}s`);
       }
 
-      const nameEl = node.querySelector('.name');
-      const pkgEl = node.querySelector('.pkg');
+      const iconEl = node.querySelector('.app-icon');
+      const loaderEl = node.querySelector('.loader');
+      const nameEl = node.querySelector('.app-name');
+      const pkgEl = node.querySelector('.package-name');
       const cb = node.querySelector('.checkbox');
 
       if (nameEl) nameEl.textContent = app.name || app.pkg;
       if (pkgEl) pkgEl.textContent = app.pkg;
+
+      // 设置data-package属性
+      if (iconEl) iconEl.setAttribute('data-package', app.pkg);
+      if (loaderEl) loaderEl.setAttribute('data-package', app.pkg);
+
+      // 检查是否支持图标显示
+      const iconContainer = node.querySelector('.app-icon-container');
+      const showIcon = typeof $packageManager !== 'undefined' || (typeof ksu !== 'undefined' && typeof ksu.getPackagesIcons === 'function');
+      if (iconContainer) {
+        iconContainer.style.display = showIcon ? 'flex' : 'none';
+      }
+
+      // 不要立即加载图标，等待IntersectionObserver处理
 
       if (cb) {
         cb.checked = SELECTED.has(app.pkg); // 预勾选 ✅
@@ -219,6 +242,14 @@ export class UIController {
     }
 
     this.setCount(SELECTED.size, apps.length);
+
+    // 设置图标IntersectionObserver
+    const showIcon = typeof $packageManager !== 'undefined' || typeof ksu !== 'undefined' && typeof ksu.getPackagesIcons === 'function';
+    if (showIcon) {
+      setTimeout(() => {
+        this.setupIconIntersectionObserver();
+      }, 100);
+    }
 
     // 只有当应用列表真正准备好并且是首次渲染时，才将标记设为false
     // 延迟设置，确保动画能够正确播放
@@ -699,6 +730,169 @@ export class UIController {
       };
     });
   }
+
+  // 设置图标IntersectionObserver以优化性能
+  setupIconIntersectionObserver() {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const container = entry.target;
+          const iconEl = container.querySelector('.app-icon');
+          const packageName = iconEl?.getAttribute('data-package');
+
+
+          if (packageName && iconEl) {
+            this.loadIcons(packageName);
+            observer.unobserve(container);
+          }
+        }
+      });
+    }, {
+      rootMargin: '100px',
+      threshold: 0.1
+    });
+
+    // 观察所有图标容器
+    const iconContainers = document.querySelectorAll('.app-icon-container');
+    iconContainers.forEach(container => {
+      observer.observe(container);
+    });
+
+    return observer;
+  }
+
+
+  // 应用图标加载函数
+  loadIcons(packageName) {
+    const imgElement = document.querySelector(`.app-icon[data-package="${packageName}"]`);
+    const loader = document.querySelector(`.loader[data-package="${packageName}"]`);
+
+
+    if (!imgElement) {
+      logger.error('icon', 'Image element not found', { packageName });
+      return;
+    }
+
+    if (this.iconCache.has(packageName)) {
+      // 从缓存加载
+      imgElement.src = this.iconCache.get(packageName);
+      if (loader) loader.style.display = 'none';
+      imgElement.style.opacity = '1';
+      logger.debug('icon', 'Loaded from cache', { packageName });
+    } else if (typeof ksu !== 'undefined' && typeof ksu.getPackagesIcons === 'function') {
+      // 使用KernelSU API - 同步调用
+      try {
+        logger.debug('icon', 'Trying KernelSU getPackagesIcons', { packageName });
+        const result = ksu.getPackagesIcons(`["${packageName}"]`, 100);
+        const app = JSON.parse(result);
+
+        logger.debug('icon', 'KernelSU result', { packageName, result: app });
+
+        if (app && app[0] && app[0].icon) {
+          this.iconCache.set(packageName, app[0].icon);
+          imgElement.src = app[0].icon;
+          if (loader) loader.style.display = 'none';
+          imgElement.style.opacity = '1';
+          logger.debug('icon', 'Loaded via KernelSU getPackagesIcons', { packageName });
+        } else {
+          logger.debug('icon', 'No icon in KernelSU response', { packageName, app });
+          this.handleIconNotFound(imgElement, loader, packageName);
+        }
+      } catch (error) {
+        logger.error('icon', 'KernelSU getPackagesIcons failed', { packageName, error: error.message });
+        this.handleIconNotFound(imgElement, loader, packageName);
+      }
+    } else if (typeof $packageManager !== 'undefined') {
+      // 使用PackageManager API
+      try {
+        logger.debug('icon', 'Trying PackageManager getApplicationIcon', { packageName });
+        const stream = $packageManager.getApplicationIcon(packageName, 0, 0);
+
+        if (stream) {
+          // 检查是否有wrapInputStream函数可用
+          if (typeof wrapInputStream === 'function') {
+            wrapInputStream(stream)
+              .then(r => r.arrayBuffer())
+              .then(buffer => {
+                const base64 = 'data:image/png;base64,' + this.arrayBufferToBase64(buffer);
+                this.iconCache.set(packageName, base64);
+                imgElement.src = base64;
+                if (loader) loader.style.display = 'none';
+                imgElement.style.opacity = '1';
+                logger.debug('icon', 'Loaded via PackageManager', { packageName });
+              })
+              .catch(error => {
+                logger.error('icon', 'PackageManager stream processing failed', { packageName, error: error.message });
+                this.handleIconNotFound(imgElement, loader, packageName);
+              });
+          } else {
+            // 尝试导入wrapInputStream (for WebUIX projects)
+            this.importWrapInputStream().then(({ wrapInputStream: wrap }) => {
+              if (wrap) {
+                wrap(stream)
+                  .then(r => r.arrayBuffer())
+                  .then(buffer => {
+                    const base64 = 'data:image/png;base64,' + this.arrayBufferToBase64(buffer);
+                    this.iconCache.set(packageName, base64);
+                    imgElement.src = base64;
+                    if (loader) loader.style.display = 'none';
+                    imgElement.style.opacity = '1';
+                    logger.debug('icon', 'Loaded via PackageManager with imported wrapInputStream', { packageName });
+                  })
+                  .catch(error => {
+                    logger.error('icon', 'PackageManager stream processing failed', { packageName, error: error.message });
+                    this.handleIconNotFound(imgElement, loader, packageName);
+                  });
+              } else {
+                logger.debug('icon', 'wrapInputStream not available', { packageName });
+                this.handleIconNotFound(imgElement, loader, packageName);
+              }
+            }).catch(error => {
+              logger.debug('icon', 'Failed to import wrapInputStream', { packageName, error: error.message });
+              this.handleIconNotFound(imgElement, loader, packageName);
+            });
+          }
+        } else {
+          logger.debug('icon', 'PackageManager stream not available', { packageName });
+          this.handleIconNotFound(imgElement, loader, packageName);
+        }
+      } catch (error) {
+        logger.error('icon', 'PackageManager getApplicationIcon failed', { packageName, error: error.message });
+        this.handleIconNotFound(imgElement, loader, packageName);
+      }
+    } else {
+      logger.debug('icon', 'No icon API available', { packageName });
+      this.handleIconNotFound(imgElement, loader, packageName);
+    }
+  }
+
+  // 处理图标未找到的情况 - 保持loader显示以继续显示shimmer动画
+  handleIconNotFound(imgElement, loader, packageName) {
+    // 不设置src，不隐藏loader，让shimmer动画继续显示
+    // 这与TrickyAddonModule的行为一致
+    this.iconCache.set(packageName, ''); // 缓存空结果
+    logger.debug('icon', 'No icon available, keeping loader visible', { packageName });
+  }
+
+  // 转换ArrayBuffer到Base64
+  arrayBufferToBase64(buffer) {
+    const uint8Array = new Uint8Array(buffer);
+    let binary = '';
+    uint8Array.forEach(byte => binary += String.fromCharCode(byte));
+    return btoa(binary);
+  }
+
+  // 动态导入wrapInputStream
+  async importWrapInputStream() {
+    try {
+      const module = await import("https://mui.kernelsu.org/internal/assets/ext/wrapInputStream.mjs");
+      return { wrapInputStream: module.wrapInputStream };
+    } catch (error) {
+      logger.debug('icon', 'Failed to import wrapInputStream from external URL', { error: error.message });
+      return { wrapInputStream: null };
+    }
+  }
+
 }
 
 // 导出单例实例

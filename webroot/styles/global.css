@@ -395,7 +395,7 @@ button:active{
   }
 }
 
-/* 现代化卡片样式 */
+/* 现代化卡片样式 - TrickyAddonModule风格布局 */
 .card, .no-icon-card{
     background:var(--card);
     border:1px solid var(--border);
@@ -404,11 +404,12 @@ button:active{
     display:flex;
     gap:16px;
     align-items:center;
+    justify-content:space-between;
     transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     min-height:auto;
     position:relative;
     box-shadow:0 2px 8px rgba(0,0,0,0.1);
-    
+
     /* 增强的开屏淡入动画 - 只在首次加载时播放 */
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -432,42 +433,126 @@ button:active{
     color:var(--accent);
 }
 
-/* 信息容器 */
-.card .info, .no-icon-card .info{
-    flex:1;
-    min-width:0;
-    display:flex;
-    flex-direction:column;
-    gap:8px;
+/* 应用图标容器 */
+.app-icon-container {
+    flex-shrink: 0;
+    height: 3.25em;
+    width: 3.25em;
+    margin-right: auto;
+    position: relative;
+    border-radius: 14px;
+    overflow: hidden;
+    background: var(--card-hover);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.loader {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, var(--border), var(--border-hover), var(--border));
+    background-size: 200% 100%;
+    animation: shimmer 1.2s infinite linear;
+    border-radius: 8px;
+    display: block;
+}
+
+.app-icon {
+    position: relative;
+    height: 100%;
+    width: 100%;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    object-fit: cover;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.card:hover .app-icon {
+    transform: scale(1.05);
+}
+
+
+@keyframes shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+/* 应用信息容器 */
+.app-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    overflow-wrap: break-word;
+    word-break: break-word;
 }
 
 /* 大字体应用名称 */
-.name, .large-name{
-    font-weight:600;
-    white-space:nowrap;
-    overflow:hidden;
-    text-overflow:ellipsis;
-    color:var(--fg);
-    font-size:16px;
-    line-height:1.4;
-    transition:color 0.2s ease;
+.app-name {
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--fg);
+    font-size: 16px;
+    line-height: 1.4;
+    transition: color 0.2s ease;
 }
 
 /* 小字体包名 */
-.pkg{
-    font-family:ui-monospace, SFMono-Regular, 'SF Mono', Monaco, Consolas, monospace;
-    font-size:12px;
-    color:var(--muted);
-    background:rgba(255,255,255,0.05);
-    padding:4px 8px;
-    border-radius:6px;
-    border:1px solid rgba(255,255,255,0.08);
-    word-break:break-all;
-    line-height:1.3;
-    font-weight:500;
+.package-name {
+    font-family: ui-monospace, SFMono-Regular, 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 12px;
+    color: var(--muted);
+    background: rgba(255,255,255,0.05);
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.08);
+    word-break: break-all;
+    line-height: 1.3;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 250px;
 }
 
-/* 现代化复选框 */
+/* 向后兼容的样式 */
+.name, .large-name {
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--fg);
+    font-size: 16px;
+    line-height: 1.4;
+    transition: color 0.2s ease;
+}
+
+.pkg {
+    font-family: ui-monospace, SFMono-Regular, 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 12px;
+    color: var(--muted);
+    background: rgba(255,255,255,0.05);
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.08);
+    word-break: break-all;
+    line-height: 1.3;
+    font-weight: 500;
+}
+
+/* 恢复原来的复选框样式 */
 .checkbox{
     width:20px;
     height:20px;
@@ -495,11 +580,15 @@ button:active{
     box-shadow:0 0 0 1px var(--accent-light);
 }
 
-.card:has(.checkbox:checked) .name, .no-icon-card:has(.checkbox:checked) .name{
+.card:has(.checkbox:checked) .app-name,
+.card:has(.checkbox:checked) .name,
+.no-icon-card:has(.checkbox:checked) .name{
     color:var(--accent);
 }
 
-.card:has(.checkbox:checked) .pkg, .no-icon-card:has(.checkbox:checked) .pkg{
+.card:has(.checkbox:checked) .package-name,
+.card:has(.checkbox:checked) .pkg,
+.no-icon-card:has(.checkbox:checked) .pkg{
     border-color:var(--accent);
     background:rgba(35, 134, 54, 0.1);
 }
@@ -599,16 +688,26 @@ button:active{
         padding:16px;
         gap:12px;
     }
-    
+
+    .app-icon-container{
+        width: 2.75em;
+        height: 2.75em;
+    }
+
+    .card .icon{
+        width:40px;
+        height:40px;
+    }
+
     .name, .large-name{
         font-size:15px;
     }
-    
+
     .pkg{
         font-size:11px;
         padding:3px 6px;
     }
-    
+
     .checkbox{
         width:18px;
         height:18px;
@@ -652,11 +751,25 @@ button:active{
         padding:12px;
         gap:10px;
     }
-    
+
+    .app-icon-container{
+        width: 2.45em;
+        height: 2.45em;
+    }
+
+    .card .icon{
+        width:36px;
+        height:36px;
+    }
+
+    .app-icon[src=""]:before, .app-icon:not([src]):before{
+        font-size:18px;
+    }
+
     .name{
         font-size:14px;
     }
-    
+
     .pkg{
         font-size:10px;
     }

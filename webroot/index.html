@@ -91,14 +91,21 @@
     <div id="empty" class="empty" style="display:none">📱 没有找到匹配的应用</div>
   </main>
 
-  <!-- 列表项模板（沿用原结构：checkbox + info(name/pkg)） -->
+  <!--
+    列表项模板（图标 + 信息 + 复选框布局）
+    基于 TrickyAddonModule-v4.1 的 applist 代码进行二次开发
+  -->
   <template id="card">
     <div class="card">
-      <input type="checkbox" class="checkbox" />
-      <div class="info">
-        <div class="name"></div>
-        <div class="pkg"></div>
+      <div class="app-icon-container">
+        <div class="loader" data-package=""></div>
+        <img class="app-icon" data-package="" src="" alt="App Icon" />
       </div>
+      <div class="app-info">
+        <div class="app-name"></div>
+        <div class="package-name"></div>
+      </div>
+      <input type="checkbox" class="checkbox" />
     </div>
   </template>
 

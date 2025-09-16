@@ -1364,6 +1364,18 @@ function render(apps) {
   uiController.bindCheckboxEvents(APPS, SELECTED, AUTO_SAVE_ENABLED, saveSelectedRealtime);
 }
 
+// 只更新复选框状态，不重新渲染整个列表（避免图标闪烁）
+function updateCheckboxesOnly() {
+  const cards = document.querySelectorAll('.card');
+  cards.forEach((card) => {
+    const pkg = card.getAttribute('data-pkg');
+    const checkbox = card.querySelector('.checkbox');
+    if (checkbox && pkg) {
+      checkbox.checked = SELECTED.has(pkg);
+    }
+  });
+}
+
 // ---------- 过滤 ----------
 function applyFilter(){
   FILTER_Q = uiController.applyFilter(APPS, FILTER_Q, render);
@@ -1546,7 +1558,9 @@ async function init(){
   if (sa) {
     const selectAllHandler = async () => {
       APPS.forEach(a=>SELECTED.add(a.pkg));
-      applyFilter();
+      // 直接更新复选框状态，避免重新渲染
+      updateCheckboxesOnly();
+      uiController.setCount(SELECTED.size, APPS.length);
       // 实时保存到XML文件
       if (AUTO_SAVE_ENABLED) {
         await saveSelectedRealtime();
@@ -1560,7 +1574,9 @@ async function init(){
   if (da) {
     const deselectAllHandler = async () => {
       SELECTED.clear();
-      applyFilter();
+      // 直接更新复选框状态，避免重新渲染
+      updateCheckboxesOnly();
+      uiController.setCount(SELECTED.size, APPS.length);
       // 实时保存到XML文件
       if (AUTO_SAVE_ENABLED) {
         await saveSelectedRealtime();
