@@ -322,13 +322,43 @@ fi'`;
   }
 }
 
+// 全局实时更新UI的函数
+function updateAppNameInUI(pkg, name) {
+  if (!pkg || !name) return false;
+
+  const row = document.querySelector(`.card[data-pkg="${pkg}"]`);
+  if (row) {
+    const nameEl = row.querySelector('.app-name');
+    if (nameEl) {
+      const wasUpdated = nameEl.textContent !== name;
+      nameEl.textContent = name;
+
+      // 同时更新应用对象状态
+      const app = APP_MAP.get(pkg);
+      if (app && wasUpdated) {
+        const wasUnlabeled = !app.labeled;
+        app.name = name;
+        app.labeled = true;
+
+        // 只有在应用之前未标记时才增加计数
+        if (wasUnlabeled) {
+          STATUS_BAR.labeledApps++;
+          updateStatusBar();
+        }
+      }
+      return wasUpdated;
+    }
+  }
+  return false;
+}
+
 // 添加或更新缓存条目
 function updateCache(pkg, name) {
   if (!pkg || !name) return;
-  
+
   const existing = PERSISTENT_CACHE.get(pkg);
   const now = Date.now();
-  
+
   // 如果名称发生变化，更新缓存
   if (!existing || existing.name !== name) {
     PERSISTENT_CACHE.set(pkg, {
@@ -337,15 +367,9 @@ function updateCache(pkg, name) {
     });
     LABEL_CACHE.set(pkg, name); // 同步到内存缓存
     CACHE_DIRTY = true; // 标记缓存需要保存
-    
+
     // 立即更新UI中的显示
-    const row = document.querySelector(`.card[data-pkg="${pkg}"]`);
-    if (row) {
-      const nameEl = row.querySelector('.name');
-      if (nameEl && nameEl.textContent !== name) {
-        nameEl.textContent = name;
-      }
-    }
+    updateAppNameInUI(pkg, name);
   }
 }
 
@@ -358,10 +382,13 @@ function batchUpdateCache(updates) {
       if (!existing || existing.name !== name) {
         updateCache(pkg, name);
         changeCount++;
+
+        // 立即更新UI显示
+        updateAppNameInUI(pkg, name);
       }
     }
   }
-  
+
   if (changeCount > 0) {
     // 在标签获取过程中更频繁地保存，减少用户等待
     setTimeout(() => savePersistentCache(), 500);
@@ -945,17 +972,8 @@ async function labelWorker(){
         if (!app.labeled) {
           const tail = app.pkg.split('.').pop() || app.pkg;
           const fallbackName = tail.charAt(0).toUpperCase() + tail.slice(1);
-          app.name = fallbackName;
-          app.labeled = true;
-          
-          const row = document.querySelector(`.card[data-pkg="${app.pkg}"]`);
-          if (row){
-            const nameEl = row.querySelector('.name');
-            if (nameEl) nameEl.textContent = fallbackName;
-          }
-          
-          STATUS_BAR.labeledApps++;
-          updateStatusBar();
+
+          updateAppNameInUI(app.pkg, fallbackName);
         }
         continue;
       }
@@ -991,20 +1009,11 @@ async function labelWorker(){
           // 标记为失败并使用传统命名
           FAILED_APPS.add(app.pkg);
           STATUS_BAR.failedApps++;
-          
+
           const tail = app.pkg.split('.').pop() || app.pkg;
           const fallbackName = tail.charAt(0).toUpperCase() + tail.slice(1);
-          app.name = fallbackName;
-          app.labeled = true;
-          
-          const row = document.querySelector(`.card[data-pkg="${app.pkg}"]`);
-          if (row){
-            const nameEl = row.querySelector('.name');
-            if (nameEl) nameEl.textContent = fallbackName;
-          }
-          
-          STATUS_BAR.labeledApps++;
-          updateStatusBar();
+
+          updateAppNameInUI(app.pkg, fallbackName);
           
           const failureReason = currentRetryCount >= MAX_RETRY_COUNT ? 'max_retries' : 'timeout';
           await fileLog('label','failed',{ 
@@ -1058,19 +1067,12 @@ async function labelWorker(){
         APP_RETRY_COUNT.delete(app.pkg);
         APP_FIRST_ATTEMPT.delete(app.pkg);
         
-        const row = document.querySelector(`.card[data-pkg="${app.pkg}"]`);
-        if (row){
-          const nameEl = row.querySelector('.name');
-          if (nameEl) nameEl.textContent = label;
-        }
-        
+        updateAppNameInUI(app.pkg, label);
+
         // 如果标签是新获取的（不是从缓存来的），更新缓存
         if (!fromCache) {
           updateCache(app.pkg, label);
         }
-        
-        STATUS_BAR.labeledApps++;
-        updateStatusBar();
         
         // 每获取20个标签就保存一次缓存，减少并发冲突
         if (STATUS_BAR.labeledApps % 20 === 0) {
@@ -1088,19 +1090,11 @@ async function labelWorker(){
           // 超过重试次数，使用fallback名称
           const tail = app.pkg.split('.').pop() || app.pkg;
           const fallbackName = tail.charAt(0).toUpperCase() + tail.slice(1);
-          app.name = fallbackName;
-          app.labeled = true;
-          
-          const row = document.querySelector(`.card[data-pkg="${app.pkg}"]`);
-          if (row) {
-            const nameEl = row.querySelector('.name');
-            if (nameEl) nameEl.textContent = fallbackName;
-          }
-          
+
+          updateAppNameInUI(app.pkg, fallbackName);
+
           FAILED_APPS.add(app.pkg);
           STATUS_BAR.failedApps++;
-          STATUS_BAR.labeledApps++;
-          updateStatusBar();
           
           await fileLog('label','fallback',{ pkg: app.pkg, fallbackName: fallbackName, retryCount: currentRetryCount });
         }
@@ -1249,16 +1243,8 @@ async function handleDeadlock() {
       
       const tail = app.pkg.split('.').pop() || app.pkg;
       const fallbackName = tail.charAt(0).toUpperCase() + tail.slice(1);
-      app.name = fallbackName;
-      app.labeled = true;
-      
-      const row = document.querySelector(`.card[data-pkg="${app.pkg}"]`);
-      if (row) {
-        const nameEl = row.querySelector('.name');
-        if (nameEl) nameEl.textContent = fallbackName;
-      }
-      
-      STATUS_BAR.labeledApps++;
+
+      updateAppNameInUI(app.pkg, fallbackName);
       
       await fileLog('deadlock','force-failed',{ 
         pkg: app.pkg, 
@@ -1295,16 +1281,8 @@ async function checkStuckApps() {
       
       const tail = pkg.split('.').pop() || pkg;
       const fallbackName = tail.charAt(0).toUpperCase() + tail.slice(1);
-      app.name = fallbackName;
-      app.labeled = true;
-      
-      const row = document.querySelector(`.card[data-pkg="${pkg}"]`);
-      if (row) {
-        const nameEl = row.querySelector('.name');
-        if (nameEl) nameEl.textContent = fallbackName;
-      }
-      
-      STATUS_BAR.labeledApps++;
+
+      updateAppNameInUI(pkg, fallbackName);
       
       // 清理记录
       APP_RETRY_COUNT.delete(pkg);
@@ -1458,19 +1436,16 @@ async function init(){
       if (firstBatch.length > 0) {
         try {
           const batchLabels = await batchGetLabels(firstBatch.map(a => a.pkg));
-          
-          // 应用批量获取的结果
+
+          // 应用批量获取的结果并立即更新UI
           firstBatch.forEach(app => {
             if (batchLabels.has(app.pkg)) {
-              app.name = batchLabels.get(app.pkg);
-              app.labeled = true;
+              const newName = batchLabels.get(app.pkg);
+
+              // 立即更新UI显示（而不是重新渲染整个列表）
+              updateAppNameInUI(app.pkg, newName);
             }
           });
-          
-          // 更新显示和状态栏
-          STATUS_BAR.labeledApps = APPS.filter(app => app.labeled).length;
-          updateStatusBar();
-          render(APPS); // 重新渲染以显示更新的应用名称
         } catch(e) {
           await fileLog('batchLabels','error',{ error: String(e) });
         }
@@ -1494,24 +1469,16 @@ async function init(){
       for (const app of quickBatch) {
         const label = fastLabelByAPI(app.pkg);
         if (label && label !== app.name) {
-          app.name = label;
-          app.labeled = true;
           cacheUpdates.set(app.pkg, label);
-          
+
           // 立即更新UI
-          const row = document.querySelector(`.card[data-pkg="${app.pkg}"]`);
-          if (row) {
-            const nameEl = row.querySelector('.name');
-            if (nameEl) nameEl.textContent = label;
-          }
+          updateAppNameInUI(app.pkg, label);
         }
       }
-      
+
       // 批量更新缓存和状态
       if (cacheUpdates.size > 0) {
         batchUpdateCache(cacheUpdates);
-        // 注意：这里不需要再次更新STATUS_BAR.labeledApps，因为在updateCache中会处理
-        updateStatusBar();
       }
       
     }, 500); // 500ms后开始快速标记，确保菜单优先设置
