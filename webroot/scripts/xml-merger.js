@@ -15,6 +15,9 @@ const FILES = {
   uirConfigModule: `${MODULE_DIR}/multimedia_display_uir_config.xml`
 };
 
+// ColorOS 版本缓存
+let cachedColorOSVersion = null;
+
 // 日志功能
 function log(level, message) {
   const timestamp = new Date().toISOString();
@@ -66,7 +69,7 @@ async function writeFile(filePath, content) {
 // 解析应用列表文件
 function parseAppList(xmlContent, format = 'feature') {
   const apps = [];
-  
+
   // 检查内容是否为空或仅包含空白字符
   if (!xmlContent || !xmlContent.trim()) {
     log('DEBUG', `解析到 0 个应用 (格式: ${format}, 文件为空)`);
@@ -92,6 +95,147 @@ function parseAppList(xmlContent, format = 'feature') {
 
   log('DEBUG', `解析到 ${apps.length} 个应用 (格式: ${format})`);
   return apps;
+}
+
+// ========== ColorOS 版本检测 ==========
+
+// 通过 getprop 检测 ColorOS 版本
+async function detectColorOSVersionByProp() {
+  try {
+    const result = await exec('getprop persist.sys.oplus.ota_ver_display');
+    const versionString = (result.stdout || '').trim();
+
+    if (versionString) {
+      log('INFO', `检测到系统版本信息: ${versionString}`);
+      // 提取版本号，例如 "PJZ110_16.0.2.403(CN01V121P04)" 中的 "16"
+      const match = versionString.match(/_(\d+)\./);
+      if (match && match[1]) {
+        const majorVersion = parseInt(match[1]);
+        log('INFO', `解析系统版本: ColorOS ${majorVersion}`);
+        return majorVersion;
+      }
+    }
+  } catch (error) {
+    log('WARN', `通过 getprop 检测版本失败: ${error.message}`);
+  }
+  return null;
+}
+
+// 通过 XML 文件格式检测 ColorOS 版本
+function detectXMLFormat(xmlContent) {
+  if (!xmlContent) return null;
+
+  // ColorOS 16 特征：使用 <supportApp> 标签
+  if (xmlContent.includes('<supportApp>')) {
+    log('INFO', '检测到 <supportApp> 标签，判断为 ColorOS 16 格式');
+    return 16;
+  }
+
+  // ColorOS 15 特征：使用 <application name=""> 标签 + HdrVision/OplusDolbyVision
+  if (xmlContent.includes('<application name=') &&
+      (xmlContent.includes('HdrVision') || xmlContent.includes('OplusDolbyVision'))) {
+    log('INFO', '检测到 <application name=""> 标签和 HdrVision/OplusDolbyVision，判断为 ColorOS 15 格式');
+    return 15;
+  }
+
+  log('WARN', '无法通过 XML 格式确定 ColorOS 版本');
+  return null;
+}
+
+// 获取 ColorOS 版本（优先使用缓存）
+async function getColorOSVersion(backupContent) {
+  if (cachedColorOSVersion !== null) {
+    log('DEBUG', `使用缓存的版本: ColorOS ${cachedColorOSVersion}`);
+    return cachedColorOSVersion;
+  }
+
+  // 方法1：通过 getprop 检测
+  let version = await detectColorOSVersionByProp();
+
+  // 方法2：如果 getprop 失败，通过 XML 文件格式检测
+  if (version === null && backupContent) {
+    version = detectXMLFormat(backupContent);
+  }
+
+  // 默认为 ColorOS 15（向后兼容）
+  if (version === null) {
+    log('WARN', '无法检测 ColorOS 版本，默认使用 ColorOS 15 格式');
+    version = 15;
+  }
+
+  cachedColorOSVersion = version;
+  return version;
+}
+
+// ========== ColorOS 16 兼容函数 ==========
+
+// 解析 ColorOS 16 格式的现有应用（使用 <supportApp> 标签）
+function parseExistingAppsC16(xmlContent, featureName) {
+  const existingApps = new Set();
+  if (!xmlContent) return existingApps;
+
+  // 查找特定 feature 区块
+  const featureRegex = new RegExp(`<feature\\s+name="${featureName}"[^>]*>([\\s\\S]*?)<\\/feature>`, 'i');
+  const featureMatch = xmlContent.match(featureRegex);
+
+  if (featureMatch) {
+    const featureContent = featureMatch[1];
+    // 提取所有 supportApp 元素
+    const appRegex = /<supportApp>([^<]+)<\/supportApp>/g;
+    let match;
+
+    while ((match = appRegex.exec(featureContent)) !== null) {
+      const pkgName = match[1].trim();
+      if (pkgName) {
+        existingApps.add(pkgName);
+      }
+    }
+  }
+
+  log('DEBUG', `从 ${featureName} (C16) 中解析到 ${existingApps.size} 个现有应用`);
+  return existingApps;
+}
+
+// 合并 ColorOS 16 格式的 feature 配置文件
+function mergeFeatureConfigC16(backupContent, newApps) {
+  if (!backupContent) {
+    log('ERROR', '备份文件内容为空');
+    return null;
+  }
+
+  let mergedContent = backupContent;
+
+  // ColorOS 16 使用 HdrGeneric feature
+  const featureName = 'HdrGeneric';
+
+  const existingApps = parseExistingAppsC16(backupContent, featureName);
+  const featureRegex = new RegExp(`(<feature\\s+name="${featureName}"[^>]*>[\\s\\S]*?)<\\/feature>`, 'i');
+
+  const match = mergedContent.match(featureRegex);
+  if (match) {
+    const featureStart = match[1];
+    let newFeatureContent = featureStart;
+
+    // 添加新应用（避免重复）
+    let addedCount = 0;
+    newApps.forEach(pkgName => {
+      if (!existingApps.has(pkgName)) {
+        newFeatureContent += `\n            <supportApp>${pkgName}</supportApp>`;
+        addedCount++;
+      }
+    });
+
+    newFeatureContent += '\n        </feature>';
+
+    // 替换原来的 feature 区块
+    mergedContent = mergedContent.replace(featureRegex, newFeatureContent);
+
+    log('INFO', `${featureName} (C16): 保留 ${existingApps.size} 个现有应用，新增 ${addedCount} 个应用`);
+  } else {
+    log('WARN', `未找到 ${featureName} feature，可能不支持 ColorOS 16 格式`);
+  }
+
+  return mergedContent;
 }
 
 // 解析现有的feature配置，提取现有应用
@@ -255,6 +399,10 @@ export async function mergeXMLFiles() {
     const featureBackupContent = await readFile(FILES.featureConfigBackup);
     const uirBackupContent = await readFile(FILES.uirConfigBackup);
 
+    // 3.5 检测 ColorOS 版本
+    const colorOSVersion = await getColorOSVersion(featureBackupContent);
+    log('INFO', `当前系统版本: ColorOS ${colorOSVersion}`);
+
     let successCount = 0;
     let errorCount = 0;
 
@@ -272,13 +420,21 @@ export async function mergeXMLFiles() {
         log('ERROR', `删除feature配置文件失败: ${error.message}`);
       }
     } else if (featureBackupContent) {
-      // 有应用时，合并配置文件
-      log('INFO', `合并feature配置文件 (${featureApps.length} 个应用)...`);
-      const mergedFeatureContent = mergeFeatureConfig(featureBackupContent, featureApps);
-      
+      // 有应用时，根据 ColorOS 版本选择合并策略
+      log('INFO', `合并feature配置文件 (${featureApps.length} 个应用, ColorOS ${colorOSVersion})...`);
+
+      let mergedFeatureContent;
+      if (colorOSVersion >= 16) {
+        // ColorOS 16 使用新的合并方法
+        mergedFeatureContent = mergeFeatureConfigC16(featureBackupContent, featureApps);
+      } else {
+        // ColorOS 15 使用原有的合并方法
+        mergedFeatureContent = mergeFeatureConfig(featureBackupContent, featureApps);
+      }
+
       if (mergedFeatureContent && await writeFile(FILES.featureConfigModule, mergedFeatureContent)) {
         successCount++;
-        log('SUCCESS', `feature配置文件合并完成 (${featureApps.length} 个应用)`);
+        log('SUCCESS', `feature配置文件合并完成 (${featureApps.length} 个应用, ColorOS ${colorOSVersion})`);
       } else {
         errorCount++;
         log('ERROR', 'feature配置文件合并失败');
@@ -317,13 +473,14 @@ export async function mergeXMLFiles() {
     }
 
     // 6. 返回结果
-    const message = `合并完成：${successCount} 个文件成功，${errorCount} 个文件失败`;
+    const message = `合并完成：${successCount} 个文件成功，${errorCount} 个文件失败 (ColorOS ${colorOSVersion})`;
     log('INFO', message);
 
     return {
       success: errorCount === 0,
       message: message,
       details: {
+        colorOSVersion: colorOSVersion,
         featureAppsCount: featureApps.length,
         uirAppsCount: uirApps.length,
         successCount,

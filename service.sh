@@ -5,8 +5,12 @@ MODPATH="${0%/*}"
 API=`getprop ro.build.version.sdk`
 LOG_TAG="enable-hdr-oneplus13-webui"
 
-# Log service start with version info
-log -t "$LOG_TAG" "Service started (API: $API)"
+# Log service start with system info
+MODULE_VERSION="$(grep '^version=' "$MODPATH/module.prop" 2>/dev/null | cut -d'=' -f2)"
+DEVICE_MODEL="$(getprop ro.product.model)"
+
+log -t "$LOG_TAG" "Service started - Module v$MODULE_VERSION"
+log -t "$LOG_TAG" "System: API $API, Device: $DEVICE_MODEL"
 log -t "$LOG_TAG" "Module path: $MODPATH"
 
 # Ensure webui directory permissions are correct
@@ -108,22 +112,73 @@ else
     fi
 fi
 
-# 清理旧日志并确保日志文件可写
-if [ -f "$LOG_FILE" ]; then
-    # 如果日志文件过大（>1MB），轮转它
-    if [ $(stat -c%s "$LOG_FILE" 2>/dev/null || echo 0) -gt 1048576 ]; then
-        mv "$LOG_FILE" "$LOG_FILE.old" 2>/dev/null
-        log -t "$LOG_TAG" "Log file rotated due to size"
+# 智能日志管理
+manage_log_files() {
+    # WebUI日志轮转（更精确的大小检查）
+    if [ -f "$LOG_FILE" ]; then
+        local log_size=$(stat -c%s "$LOG_FILE" 2>/dev/null || echo 0)
+        if [ "$log_size" -gt 1048576 ]; then
+            local timestamp=$(date +%Y%m%d_%H%M%S)
+            mv "$LOG_FILE" "${LOG_FILE}.${timestamp}.old" 2>/dev/null
+            log -t "$LOG_TAG" "WebUI log rotated: ${log_size} bytes -> ${LOG_FILE}.${timestamp}.old"
+        fi
     fi
-fi
 
-# 测试日志文件写入权限
-touch "$LOG_FILE" 2>/dev/null && rm -f "$LOG_FILE" 2>/dev/null
-if [ $? -eq 0 ]; then
-    log -t "$LOG_TAG" "Log directory is writable"
-else
-    log -t "$LOG_TAG" "Warning: Log directory may not be writable"
-fi
+    # 清理超过7天的旧日志
+    find "$MODPATH" -name "*.log.*" -type f -mtime +7 -delete 2>/dev/null
+
+    # 测试日志目录写入权限
+    local test_file="$MODPATH/.test_write"
+    if touch "$test_file" 2>/dev/null; then
+        rm -f "$test_file" 2>/dev/null
+        log -t "$LOG_TAG" "Log directory permissions verified"
+    else
+        log -t "$LOG_TAG" "Warning: Log directory write test failed"
+    fi
+}
+
+manage_log_files
+
+# 服务健康检查
+service_health_check() {
+    log -t "$LOG_TAG" "=== Service Health Check ==="
+
+    # 系统资源检查
+    local free_mem=$(free | grep 'Mem:' | awk '{printf "%.1f", $7/1024}' 2>/dev/null || echo "unknown")
+    local uptime_info=$(uptime | awk '{print $3 $4}' | sed 's/,//')
+    log -t "$LOG_TAG" "System: Free memory ${free_mem}MB, uptime $uptime_info"
+
+    # 模块文件完整性检查
+    local critical_files="webroot/index.html webroot/scripts/main.js webroot/scripts/xml-merger.js"
+    local missing_files=0
+
+    for file in $critical_files; do
+        if [ ! -f "$MODPATH/$file" ]; then
+            log -t "$LOG_TAG" "❌ Critical file missing: $file"
+            missing_files=$((missing_files + 1))
+        fi
+    done
+
+    if [ $missing_files -eq 0 ]; then
+        log -t "$LOG_TAG" "✅ All critical files present"
+    else
+        log -t "$LOG_TAG" "⚠️  $missing_files critical files missing"
+    fi
+
+    # 用户配置状态
+    local config_status="none"
+    if [ -f "$MODPATH/appList.xml" ] && [ -s "$MODPATH/appList.xml" ]; then
+        config_status="legacy"
+    fi
+    if [ -f "$MODPATH/appList_new.xml" ] && [ -s "$MODPATH/appList_new.xml" ]; then
+        config_status="${config_status}_new"
+    fi
+
+    log -t "$LOG_TAG" "User config status: $config_status"
+}
+
+# 执行健康检查
+service_health_check
 
 # 最终状态报告
 log -t "$LOG_TAG" "=== Module Setup Complete ==="

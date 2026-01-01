@@ -1,7 +1,6 @@
 id=enable-hdr-oneplus13-webui
 name=Enable HDR for OnePlus 13 (WebUI)
-version=v1.6.4
-versionCode=1640
-author=Oxford,HoneyWhiteCloud,FTReey@coolapk
-description=为一加13添加额外APP包名至其HDR白名单的模块，自带WebUI方便管理包名，理论上适用于有HDR白名单的ColorOS/OxygenOS系统的机器（请自行测试）
-updateJson=
+version=v1.6.6
+versionCode=1660
+author=Oxford,HoneyWhiteCloud(coolapk酷安同名),FTReey@coolapk
+description=Enable HDR for more apps on OnePlus/OPPO/realme devices with WebUI support. Do not use the Meta module, otherwise this module will not function properly. 为有APP白名单限制的黑厂设备开启HDR功能，请不要安装元模块（meta模块）否则模块可能无法正常运行。
