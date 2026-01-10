@@ -1,7 +1,7 @@
 #!/system/bin/sh
 
 # 此脚本在文件系统挂载后运行
-# 使用 mountify standalone 自行管理挂载
+# 使用 root 管理器默认挂载方式
 # XML 处理由 WebUI 的 JavaScript 完成
 
 MODPATH="$(dirname "$(realpath "$0")")" # 模块目录路径
@@ -33,28 +33,7 @@ log_msg "INFO" "模块路径: $MODPATH"
 log_msg "INFO" "Android API: $(getprop ro.build.version.sdk)"
 log_msg "INFO" "设备品牌: $(getprop ro.product.brand)"
 log_msg "INFO" "制造商: $(getprop ro.product.manufacturer)"
-
-##########################################################################################
-# mountify standalone 挂载处理
-##########################################################################################
-
-log_msg "MOUNT" "======== 使用 mountify standalone 处理挂载 ========"
-
-# 调用 mountify standalone 脚本处理挂载
-if [ -f "$MODPATH/mountify.sh" ]; then
-    log_msg "MOUNT" "发现 mountify.sh，开始执行"
-    sh "$MODPATH/mountify.sh"
-    mount_result=$?
-    if [ $mount_result -eq 0 ]; then
-        log_msg "SUCCESS" "mountify.sh 执行成功"
-    else
-        log_msg "ERROR" "mountify.sh 执行失败，退出代码: $mount_result"
-    fi
-else
-    log_msg "ERROR" "mountify.sh 未找到！挂载将失败"
-fi
-
-log_msg "MOUNT" "======== mountify standalone 处理完成 ========"
+log_msg "INFO" "挂载方式: 模块自行处理挂载 (skip_mount)"
 
 ##########################################################################################
 # 用户配置恢复逻辑 - 从 /data/adb 临时目录恢复
@@ -213,6 +192,103 @@ else
 fi
 
 ##########################################################################################
+# 手动挂载配置文件
+##########################################################################################
+
+log_msg "MOUNT" "开始执行手动挂载操作"
+
+# 确保目标目录存在
+TARGET_DIR="/my_product/vendor/etc"
+if [ ! -d "$TARGET_DIR" ]; then
+    log_msg "ERROR" "目标目录不存在: $TARGET_DIR"
+    log_msg "MOUNT" "尝试创建目标目录"
+    mkdir -p "$TARGET_DIR" 2>/dev/null || log_msg "ERROR" "无法创建目标目录"
+fi
+
+# 挂载函数
+mount_file() {
+    local source_file="$1"
+    local target_file="$2"
+    local file_desc="$3"
+
+    # 检查源文件是否存在
+    if [ ! -f "$source_file" ]; then
+        log_msg "WARN" "源文件不存在: $source_file，跳过挂载"
+        return 1
+    fi
+
+    # 确保目标文件存在（创建空文件）
+    if [ ! -f "$target_file" ]; then
+        log_msg "INFO" "目标文件不存在，创建空文件: $target_file"
+        touch "$target_file" 2>/dev/null || {
+            log_msg "ERROR" "无法创建目标文件: $target_file"
+            return 1
+        }
+    fi
+
+    # 执行挂载
+    log_msg "MOUNT" "挂载 $file_desc: $source_file -> $target_file"
+    if mount --bind "$source_file" "$target_file" 2>/dev/null; then
+        log_msg "SUCCESS" "$file_desc 挂载成功"
+
+        # 验证挂载
+        if mount | grep -q "$target_file"; then
+            local file_size=$(stat -c%s "$target_file" 2>/dev/null || echo "unknown")
+            log_msg "DEBUG" "$file_desc 挂载验证通过，文件大小: $file_size 字节"
+            return 0
+        else
+            log_msg "WARN" "$file_desc 挂载验证失败"
+            return 1
+        fi
+    else
+        log_msg "ERROR" "$file_desc 挂载失败"
+        return 1
+    fi
+}
+
+# 挂载配置文件
+mount_count=0
+
+# 1. 挂载 multimedia_display_feature_config.xml
+SOURCE_CONFIG="$MODPATH/multimedia_display_feature_config.xml"
+TARGET_CONFIG="$TARGET_FILE"
+
+# 如果模块中没有配置文件，尝试从备份恢复
+if [ ! -f "$SOURCE_CONFIG" ] && [ -f "$BACKUP_FILE" ]; then
+    log_msg "INFO" "模块中无配置文件，从备份复制"
+    cp "$BACKUP_FILE" "$SOURCE_CONFIG" 2>/dev/null
+fi
+
+if mount_file "$SOURCE_CONFIG" "$TARGET_CONFIG" "功能配置文件(feature_config)"; then
+    mount_count=$((mount_count + 1))
+fi
+
+# 2. 挂载 multimedia_display_uir_config.xml
+SOURCE_CONFIG_NEW="$MODPATH/multimedia_display_uir_config.xml"
+TARGET_CONFIG_NEW="$TARGET_FILE_NEW"
+
+# 如果模块中没有配置文件，尝试从备份恢复
+if [ ! -f "$SOURCE_CONFIG_NEW" ] && [ -f "$BACKUP_FILE_NEW" ]; then
+    log_msg "INFO" "模块中无配置文件，从备份复制"
+    cp "$BACKUP_FILE_NEW" "$SOURCE_CONFIG_NEW" 2>/dev/null
+fi
+
+if mount_file "$SOURCE_CONFIG_NEW" "$TARGET_CONFIG_NEW" "UIR配置文件(uir_config)"; then
+    mount_count=$((mount_count + 1))
+fi
+
+# 挂载结果统计
+log_msg "MOUNT" "挂载操作完成，成功挂载 $mount_count 个文件"
+
+if [ $mount_count -eq 0 ]; then
+    log_msg "WARN" "没有文件被成功挂载，模块可能无法正常工作"
+elif [ $mount_count -eq 2 ]; then
+    log_msg "SUCCESS" "所有配置文件挂载成功"
+else
+    log_msg "WARN" "部分文件挂载失败（成功: $mount_count/2）"
+fi
+
+##########################################################################################
 # 验证和最终状态
 ##########################################################################################
 
@@ -252,6 +328,20 @@ fi
 if [ -f "$MODPATH/multimedia_display_uir_config.xml" ]; then
     uir_size=$(wc -c < "$MODPATH/multimedia_display_uir_config.xml" 2>/dev/null || echo "0")
     log_msg "FINAL" "UIR配置文件大小: $uir_size 字节"
+fi
+
+# 最终挂载状态检查
+log_msg "FINAL" "最终挂载状态检查："
+if mount | grep -q "$TARGET_FILE"; then
+    log_msg "FINAL" "✓ $TARGET_FILE 已挂载"
+else
+    log_msg "FINAL" "✗ $TARGET_FILE 未挂载"
+fi
+
+if mount | grep -q "$TARGET_FILE_NEW"; then
+    log_msg "FINAL" "✓ $TARGET_FILE_NEW 已挂载"
+else
+    log_msg "FINAL" "✗ $TARGET_FILE_NEW 未挂载"
 fi
 
 log_msg "INFO" "XML处理逻辑已移至WebUI，请通过WebUI界面进行文件合并操作"
